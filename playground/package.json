@@ -1,0 +1,9 @@
+{
+  "name": "common-web-playground",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxi dev",
+    "build": "nuxi build"
+  }
+}

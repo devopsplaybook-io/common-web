@@ -1,0 +1,56 @@
+name: PR Check
+
+on:
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  base-package:
+    runs-on: ubuntu-latest
+    outputs:
+      exists: ${{ steps.check.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check whether main has a package manifest
+        id: check
+        run: |
+          git fetch origin main --depth=1
+          if git cat-file -e origin/main:package.json 2>/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  bootstrap-checks:
+    name: Bootstrap verification (initial package PR)
+    needs: base-package
+    if: needs.base-package.outputs.exists == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm audit --audit-level=high
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  npm-pr:
+    needs: base-package
+    if: needs.base-package.outputs.exists == 'true'
+    uses: devopsplaybook-io/common-utils/.github/workflows/reusable-npm-pr.yml@main
+    with:
+      npm_package_name: "@devopsplaybook.io/common-web"
+      node_version: "22"
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      QUALITY_DASHBOARD_URL: ${{ secrets.QUALITY_DASHBOARD_URL }}
+      QUALITY_DASHBOARD_TOKEN: ${{ secrets.QUALITY_DASHBOARD_TOKEN }}
