@@ -1,0 +1,36 @@
+#page-layout {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: var(--app-height, 100dvh);
+}
+
+#page-alert-messages {
+  position: fixed;
+  right: var(--space-xl, 2rem);
+  bottom: var(--space-xl, 2rem);
+  z-index: 1000;
+  max-width: min(80vw, 36rem);
+}
+
+@keyframes dpb-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dpb-blink {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.dpb-fade-in {
+  animation: dpb-fade 180ms ease-out;
+}
+
+.dpb-blink {
+  animation: dpb-blink 1s ease-in-out infinite;
+}
