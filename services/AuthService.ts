@@ -1,7 +1,14 @@
+import axios from "axios";
 import { jwtDecode } from "jwt-decode";
+import Config from "./Config";
 
 export const AUTH_TOKEN_KEY = "auth_token";
 const LEGACY_TOKEN_KEYS = ["AUTH_TOKEN", "AUTH_TOKEN_KEY"] as const;
+
+interface AuthTokenClaims {
+  exp?: number;
+  iat?: number;
+}
 
 export interface AuthHeaders {
   headers?: {
@@ -10,6 +17,10 @@ export interface AuthHeaders {
 }
 
 export class AuthService {
+  private static renewal:
+    | { token: string; promise: Promise<string | null> }
+    | null = null;
+
   static async isAuthenticated(): Promise<boolean> {
     return Boolean(await AuthService.getToken());
   }
@@ -40,10 +51,20 @@ export class AuthService {
 
     if (!token) return null;
 
-    const decoded = jwtDecode<{ exp?: number }>(token);
-    if (typeof decoded.exp === "number" && decoded.exp <= Date.now() / 1000) {
+    const decoded = jwtDecode<AuthTokenClaims>(token);
+    const now = Date.now() / 1000;
+    if (typeof decoded.exp === "number" && decoded.exp <= now) {
       await AuthService.removeToken();
       return null;
+    }
+
+    if (
+      typeof decoded.exp === "number" &&
+      typeof decoded.iat === "number" &&
+      decoded.exp > decoded.iat &&
+      decoded.exp - now <= (decoded.exp - decoded.iat) * 0.2
+    ) {
+      return AuthService.renewToken(token);
     }
 
     return token;
@@ -54,5 +75,44 @@ export class AuthService {
     return token
       ? { headers: { Authorization: `Bearer ${token}` } }
       : {};
+  }
+
+  private static async renewToken(token: string): Promise<string | null> {
+    const existing = AuthService.renewal;
+    if (existing?.token === token) {
+      return existing.promise;
+    }
+
+    const promise = AuthService.requestTokenRenewal(token);
+    AuthService.renewal = { token, promise };
+    try {
+      return await promise;
+    } finally {
+      if (AuthService.renewal?.promise === promise) {
+        AuthService.renewal = null;
+      }
+    }
+  }
+
+  private static async requestTokenRenewal(
+    token: string,
+  ): Promise<string | null> {
+    const config = await Config.get();
+    const response = await axios.post<{ token?: unknown }>(
+      `${config.SERVER_URL}/users/session/refresh`,
+      {},
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    const renewedToken = response.data?.token;
+    if (typeof renewedToken !== "string" || renewedToken.length === 0) {
+      throw new Error("Session renewal response did not include a token");
+    }
+
+    if (localStorage.getItem(AUTH_TOKEN_KEY) !== token) {
+      return localStorage.getItem(AUTH_TOKEN_KEY);
+    }
+
+    await AuthService.saveToken(renewedToken);
+    return renewedToken;
   }
 }

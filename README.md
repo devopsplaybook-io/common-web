@@ -50,6 +50,10 @@ required. The `playground/` directory demonstrates a consuming app.
 The canonical auth storage key is `auth_token`. During this compatibility
 release, `AUTH_TOKEN` and `AUTH_TOKEN_KEY` are read and migrated to the
 canonical key. Tokens remain in `localStorage`, matching existing applications.
+When an authenticated token has entered the final 20% of its lifetime,
+`AuthService` renews it through `POST /api/users/session/refresh` before
+returning it from `getToken()` or `getAuthHeader()`. This extends active
+sessions without requiring users to sign in again.
 
 ## Tokens and app-shell styles
 
