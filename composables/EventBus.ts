@@ -7,6 +7,8 @@ export interface AlertMessage {
 }
 
 interface AppEvents {
+  [event: string]: unknown;
+  [event: symbol]: unknown;
   ALERT_MESSAGE: AlertMessage;
   AUTH_UPDATED: void;
 }
