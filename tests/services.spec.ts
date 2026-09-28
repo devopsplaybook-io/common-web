@@ -7,8 +7,13 @@ import { RefreshIntervalService } from "@devopsplaybook.io/common-web/services/R
 import { Timeout } from "@devopsplaybook.io/common-web/services/Timeout";
 import { UserService } from "@devopsplaybook.io/common-web/services/UserService";
 
-function tokenWithExpiry(exp: number): string {
-  const payload = btoa(JSON.stringify({ exp }));
+function tokenWithExpiry(
+  exp: number,
+  iat = Math.floor(Date.now() / 1000),
+): string {
+  const payload = btoa(
+    JSON.stringify({ exp, iat }),
+  );
   return `header.${payload}.signature`;
 }
 
@@ -36,6 +41,37 @@ describe("shared services", () => {
 
     expect(await AuthService.isAuthenticated()).toBe(false);
     expect(localStorage.getItem("auth_token")).toBeNull();
+  });
+
+  it("renews a token near expiry before returning it", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const oldToken = tokenWithExpiry(now + 100, now - 3600);
+    const renewedToken = tokenWithExpiry(
+      now + 3600,
+    );
+    localStorage.setItem("auth_token", oldToken);
+    const post = vi.spyOn(axios, "post").mockResolvedValue({
+      data: { success: true, token: renewedToken },
+    });
+
+    expect(await AuthService.getAuthHeader()).toEqual({
+      headers: { Authorization: `Bearer ${renewedToken}` },
+    });
+    expect(localStorage.getItem("auth_token")).toBe(renewedToken);
+    expect(post).toHaveBeenCalledWith(
+      "/api/users/session/refresh",
+      {},
+      { headers: { Authorization: `Bearer ${oldToken}` } },
+    );
+  });
+
+  it("does not renew a token while it has most of its lifetime remaining", async () => {
+    const token = tokenWithExpiry(Math.floor(Date.now() / 1000) + 3600);
+    localStorage.setItem("auth_token", token);
+    const post = vi.spyOn(axios, "post");
+
+    expect(await AuthService.getToken()).toBe(token);
+    expect(post).not.toHaveBeenCalled();
   });
 
   it("uses the API base and checks the user initialization endpoint", async () => {
