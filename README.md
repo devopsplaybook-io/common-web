@@ -85,7 +85,9 @@ import Loading from "@devopsplaybook.io/common-web/components/Loading.vue";
 
 ## Compatibility and release policy
 
-This release supports Nuxt `^4.0.0` and Pinia `^2.0.0 || ^3.0.0`. Nuxt 3
+This release supports Nuxt `^4.0.0` and Pinia
+`^2.0.0 || ^3.0.0 || ^4.0.0`. Pinia 4 is ESM-only and requires the consuming
+application to install its `@vue/devtools-api` peer dependency. Nuxt 3
 applications (including Telepathy) are not supported.
 
 For a Nuxt major upgrade, update the peer dependency, build the playground with
