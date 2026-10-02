@@ -1,5 +1,6 @@
 import axios from "axios";
 import { jwtDecode } from "jwt-decode";
+import { EventBus, EventTypes } from "../composables/EventBus";
 import Config from "./Config";
 
 export const AUTH_TOKEN_KEY = "auth_token";
@@ -28,11 +29,13 @@ export class AuthService {
   static async saveToken(token: string): Promise<void> {
     localStorage.setItem(AUTH_TOKEN_KEY, token);
     for (const key of LEGACY_TOKEN_KEYS) localStorage.removeItem(key);
+    EventBus.emit(EventTypes.AUTH_UPDATED, undefined);
   }
 
   static async removeToken(_token?: string): Promise<void> {
     localStorage.removeItem(AUTH_TOKEN_KEY);
     for (const key of LEGACY_TOKEN_KEYS) localStorage.removeItem(key);
+    EventBus.emit(EventTypes.AUTH_UPDATED, undefined);
   }
 
   static async getToken(): Promise<string | null> {

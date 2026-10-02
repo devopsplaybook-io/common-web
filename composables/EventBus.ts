@@ -4,6 +4,7 @@ export interface AlertMessage {
   type?: "info" | "success" | "warning" | "error" | string;
   text: string;
   durationMs?: number;
+  stack?: string;
 }
 
 interface AppEvents {
@@ -24,7 +25,8 @@ export const EventBus = mitt<AppEvents>();
 
 export function handleError(error: unknown): void {
   console.error(error);
-  let text = error instanceof Error ? error.message : String(error);
+  let text =
+    error instanceof Error ? `${error.name}: ${error.message}` : String(error);
 
   if (typeof error === "object" && error !== null && "response" in error) {
     const response = error.response;
@@ -41,5 +43,10 @@ export function handleError(error: unknown): void {
     }
   }
 
-  EventBus.emit(EventTypes.ALERT_MESSAGE, { type: "error", text });
+  const message: AlertMessage = { type: "error", text };
+  if (error instanceof Error && error.stack) {
+    message.stack = error.stack;
+  }
+
+  EventBus.emit(EventTypes.ALERT_MESSAGE, message);
 }

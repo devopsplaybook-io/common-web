@@ -1,6 +1,6 @@
 {
   "name": "@devopsplaybook.io/common-web",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Shared Nuxt layer for DevOpsPlaybook web applications",
   "license": "ISC",
   "engines": {
@@ -20,6 +20,7 @@
     "assets",
     "components",
     "composables",
+    "plugins",
     "services",
     "stores",
     "README.md",
@@ -29,7 +30,7 @@
   ],
   "scripts": {
     "dev": "nuxi dev playground",
-    "lint": "oxlint components composables services stores tests scripts playground vitest.config.ts nuxt.config.ts",
+    "lint": "oxlint components composables plugins services stores tests scripts playground vitest.config.ts nuxt.config.ts",
     "test": "node scripts/test-packed.mjs",
     "build": "node scripts/build-package.mjs"
   },

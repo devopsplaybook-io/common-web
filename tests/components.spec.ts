@@ -1,5 +1,5 @@
 import { mount } from "@vue/test-utils";
-import { nextTick } from "vue";
+import { defineComponent, h, nextTick } from "vue";
 import { afterEach, describe, expect, it } from "vitest";
 import AlertMessages from "@devopsplaybook.io/common-web/components/AlertMessages.vue";
 import AppNavigation from "@devopsplaybook.io/common-web/components/AppNavigation.vue";
@@ -9,6 +9,13 @@ import {
   EventBus,
   EventTypes,
 } from "@devopsplaybook.io/common-web/composables/EventBus";
+
+const NuxtLinkStub = defineComponent({
+  props: { to: { type: String, required: true } },
+  setup(props, { slots }) {
+    return () => h("a", { href: props.to }, slots.default?.());
+  },
+});
 
 const wrappers: Array<{ unmount: () => void }> = [];
 
@@ -48,10 +55,12 @@ describe("components from the packed layer", () => {
         links: [{ label: "Home", to: "/", active: true }],
       },
       slots: { brand: "<strong>Example</strong>" },
+      global: { stubs: { NuxtLink: NuxtLinkStub } },
     });
     wrappers.push(wrapper);
 
     expect(wrapper.get("nav").attributes("aria-label")).toBe("Main navigation");
+    expect(wrapper.get("a").attributes("href")).toBe("/");
     expect(wrapper.get("a").attributes("aria-current")).toBe("page");
     expect(wrapper.text()).toContain("Example");
   });

@@ -5,10 +5,10 @@
     </div>
     <ul class="app-navigation-links">
       <li v-for="link in links" :key="link.to">
-        <a :href="link.to" :aria-current="link.active ? 'page' : undefined">
+        <NuxtLink :to="link.to" :aria-current="link.active ? 'page' : undefined">
           <span v-if="link.icon" :class="link.icon" aria-hidden="true" />
           {{ link.label }}
-        </a>
+        </NuxtLink>
       </li>
     </ul>
     <slot />

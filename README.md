@@ -38,7 +38,9 @@ required. The `playground/` directory demonstrates a consuming app.
 
 - `useTheme()` persists `light`/`dark` preferences in `localStorage` and applies
   `data-theme` to the document root. Use `setTheme("system")` to return to the
-  operating-system preference.
+  operating-system preference. The returned `isDark` reflects the effective
+  theme, including `prefers-color-scheme` while the preference is `system`,
+  and follows media-query changes.
 - `useAppHeight()` updates `--app-height` from `visualViewport` when available
   and cleans up resize listeners on unmount.
 - `useOfflineStatus()` returns a reactive `isOnline` ref.
@@ -54,6 +56,32 @@ When an authenticated token has entered the final 20% of its lifetime,
 `AuthService` renews it through `POST /api/users/session/refresh` before
 returning it from `getToken()` or `getAuthHeader()`. This extends active
 sessions without requiring users to sign in again.
+
+`AuthService.saveToken()` and `removeToken()` emit `EventTypes.AUTH_UPDATED`
+on `EventBus`, including when a session renewal stores a renewed token. The
+Pinia authentication store subscribes to the event and refreshes its
+`isAuthenticated` state.
+
+A client-side Nuxt plugin (`plugins/common-web-axios.client.ts`) registers
+axios interceptors automatically: requests without an explicit `Authorization`
+header receive the stored bearer token, and 401 responses clear the stale
+token. Explicit-header flows (for example `getAuthHeader()`) are left
+untouched, and the interceptors register only once per axios instance.
+
+`Config.get()` stays asynchronous and returns `{ SERVER_URL: "/api" }` by
+default. Applications can inject a different base URL with
+`Config.set({ SERVER_URL: "https://api.example.com" })` and restore the
+defaults with `Config.reset()`.
+
+Additional behaviors to be aware of when adopting this release:
+
+- `UserService.isInitialized()` resolves to `false` when the initialization
+  endpoint cannot be reached (previously it rejected).
+- `RefreshIntervalService.set()` throws a `TypeError` for values that are not
+  non-negative integer strings; `"0"` remains valid.
+- `handleError` alerts keep the `response.data.error` string when present and
+  otherwise include the error type (`"Name: message"` for `Error` instances);
+  the optional `stack` field of the alert payload carries the stack trace.
 
 ## Tokens and app-shell styles
 

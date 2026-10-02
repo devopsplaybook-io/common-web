@@ -14,6 +14,9 @@
 </template>
 
 <script setup lang="ts">
-const links = [{ label: "Home", to: "/" }];
+const links = [
+  { label: "Home", to: "/" },
+  { label: "Deep", to: "/deep" },
+];
 useAppHeight();
 </script>
