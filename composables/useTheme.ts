@@ -6,16 +6,20 @@ const THEME_KEY = "UI_THEME";
 
 export function useTheme() {
   const preference = ref<ThemePreference>("system");
-  const isDark = computed(() => preference.value === "dark");
+  const systemPrefersDark = ref(false);
+  const isDark = computed(
+    () =>
+      preference.value === "dark" ||
+      (preference.value === "system" && systemPrefersDark.value),
+  );
   let mediaQuery: MediaQueryList | undefined;
 
   function applyTheme(): void {
     if (typeof document === "undefined") return;
 
-    const prefersDark = mediaQuery?.matches ?? false;
     const theme =
       preference.value === "system"
-        ? prefersDark
+        ? systemPrefersDark.value
           ? "dark"
           : "light"
         : preference.value;
@@ -35,7 +39,8 @@ export function useTheme() {
     setTheme(isDark.value ? "light" : "dark");
   }
 
-  function handleSystemThemeChange(): void {
+  function handleSystemThemeChange(event: MediaQueryListEvent): void {
+    systemPrefersDark.value = event.matches;
     if (preference.value === "system") applyTheme();
   }
 
@@ -44,6 +49,7 @@ export function useTheme() {
     preference.value =
       storedTheme === "light" || storedTheme === "dark" ? storedTheme : "system";
     mediaQuery = window.matchMedia?.("(prefers-color-scheme: dark)");
+    systemPrefersDark.value = mediaQuery?.matches ?? false;
     mediaQuery?.addEventListener?.("change", handleSystemThemeChange);
     applyTheme();
   });
