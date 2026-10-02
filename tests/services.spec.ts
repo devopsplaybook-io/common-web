@@ -1,5 +1,6 @@
 import axios from "axios";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { EventBus, EventTypes } from "@devopsplaybook.io/common-web/composables/EventBus";
 import { AuthService } from "@devopsplaybook.io/common-web/services/AuthService";
 import Config from "@devopsplaybook.io/common-web/services/Config";
 import { PreferencesService } from "@devopsplaybook.io/common-web/services/PreferencesService";
@@ -19,6 +20,8 @@ function tokenWithExpiry(
 
 afterEach(() => {
   localStorage.clear();
+  EventBus.all.clear();
+  Config.reset();
   vi.restoreAllMocks();
   vi.useRealTimers();
 });
@@ -74,6 +77,33 @@ describe("shared services", () => {
     expect(post).not.toHaveBeenCalled();
   });
 
+  it("emits AUTH_UPDATED when a token is saved or removed", async () => {
+    const token = tokenWithExpiry(Math.floor(Date.now() / 1000) + 3600);
+    const updated = vi.fn();
+    EventBus.on(EventTypes.AUTH_UPDATED, updated);
+
+    await AuthService.saveToken(token);
+    expect(updated).toHaveBeenCalledTimes(1);
+
+    await AuthService.removeToken();
+    expect(updated).toHaveBeenCalledTimes(2);
+  });
+
+  it("emits AUTH_UPDATED after renewing a session", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const oldToken = tokenWithExpiry(now + 100, now - 3600);
+    const renewedToken = tokenWithExpiry(now + 3600);
+    localStorage.setItem("auth_token", oldToken);
+    vi.spyOn(axios, "post").mockResolvedValue({
+      data: { success: true, token: renewedToken },
+    });
+    const updated = vi.fn();
+    EventBus.on(EventTypes.AUTH_UPDATED, updated);
+
+    expect(await AuthService.getToken()).toBe(renewedToken);
+    expect(updated).toHaveBeenCalledTimes(1);
+  });
+
   it("uses the API base and checks the user initialization endpoint", async () => {
     const get = vi.spyOn(axios, "get").mockResolvedValue({
       data: { initialized: true },
@@ -82,6 +112,22 @@ describe("shared services", () => {
     expect(await Config.get()).toEqual({ SERVER_URL: "/api" });
     expect(await UserService.isInitialized()).toBe(true);
     expect(get).toHaveBeenCalledWith("/api/users/status/initialization");
+  });
+
+  it("resolves user initialization to false on network failures", async () => {
+    vi.spyOn(axios, "get").mockRejectedValue(new Error("network down"));
+
+    expect(await UserService.isInitialized()).toBe(false);
+  });
+
+  it("supports injecting and resetting the shared configuration", async () => {
+    Config.set({ SERVER_URL: "https://api.example.com" });
+    expect(await Config.get()).toEqual({
+      SERVER_URL: "https://api.example.com",
+    });
+
+    Config.reset();
+    expect(await Config.get()).toEqual({ SERVER_URL: "/api" });
   });
 
   it("stores preferences and uses the default refresh interval", () => {
@@ -93,6 +139,18 @@ describe("shared services", () => {
     expect(PreferencesService.get("density")).toBe("compact");
     PreferencesService.remove("density");
     expect(PreferencesService.get("density")).toBeNull();
+  });
+
+  it("validates refresh interval values", () => {
+    RefreshIntervalService.set("0");
+    expect(RefreshIntervalService.get()).toBe("0");
+    RefreshIntervalService.set("30000");
+    expect(RefreshIntervalService.get()).toBe("30000");
+
+    for (const invalid of ["abc", "-1", "5s", "1.5", ""]) {
+      expect(() => RefreshIntervalService.set(invalid)).toThrow(TypeError);
+    }
+    expect(RefreshIntervalService.get()).toBe("30000");
   });
 
   it("resolves Timeout.wait after the requested delay", async () => {
