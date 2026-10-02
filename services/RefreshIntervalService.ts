@@ -7,6 +7,11 @@ export class RefreshIntervalService {
   }
 
   static set(value: string): void {
+    if (!/^\d+$/.test(value)) {
+      throw new TypeError(
+        `Invalid refresh interval: ${String(value)} (expected a non-negative integer string)`,
+      );
+    }
     localStorage.setItem(RefreshIntervalService.KEY, value);
   }
 }
