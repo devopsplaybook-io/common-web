@@ -1,18 +1,28 @@
 import { acceptHMRUpdate, defineStore } from "pinia";
+import { ref } from "vue";
+import { EventBus, EventTypes } from "../composables/EventBus";
 import { AuthService } from "../services/AuthService";
 
 export function createAuthenticationStore() {
-  return defineStore("AuthenticationStore", {
-    state: () => ({
-      isAuthenticated: false,
-    }),
+  return defineStore("AuthenticationStore", () => {
+    const isAuthenticated = ref(false);
 
-    actions: {
-      async ensureAuthenticated(): Promise<boolean> {
-        this.isAuthenticated = await AuthService.isAuthenticated();
-        return this.isAuthenticated;
-      },
-    },
+    async function refreshAuthentication(): Promise<void> {
+      isAuthenticated.value = await AuthService.isAuthenticated();
+    }
+
+    async function ensureAuthenticated(): Promise<boolean> {
+      await refreshAuthentication();
+      return isAuthenticated.value;
+    }
+
+    if (typeof window !== "undefined") {
+      EventBus.on(EventTypes.AUTH_UPDATED, () => {
+        void refreshAuthentication();
+      });
+    }
+
+    return { isAuthenticated, ensureAuthenticated };
   });
 }
 
