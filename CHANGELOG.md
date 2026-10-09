@@ -5,6 +5,15 @@ All notable changes to this project are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-10-09
+
+### Changed
+
+- Upgrade the development toolchain: Nuxt 4.5.2 to 4.6.0, Vitest and
+  `@vitest/coverage-v8` 5.0.2 to 5.0.3, jsdom 30.1.1 to 30.1.2 and oxlint
+  1.85.0 to 1.87.0. Runtime dependencies and the published layer files are
+  unchanged.
+
 ## [0.3.0] - 2026-09-28
 
 ### Added
