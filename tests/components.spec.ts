@@ -5,6 +5,7 @@ import AlertMessages from "@devopsplaybook.io/common-web/components/AlertMessage
 import AppNavigation from "@devopsplaybook.io/common-web/components/AppNavigation.vue";
 import Loading from "@devopsplaybook.io/common-web/components/Loading.vue";
 import OfflineBanner from "@devopsplaybook.io/common-web/components/OfflineBanner.vue";
+import SettingsPage from "@devopsplaybook.io/common-web/components/SettingsPage.vue";
 import {
   EventBus,
   EventTypes,
@@ -54,6 +55,51 @@ describe("components from the packed layer", () => {
     expect(wrapper.get("nav").attributes("aria-label")).toBe("Main navigation");
     expect(wrapper.get("a").attributes("aria-current")).toBe("page");
     expect(wrapper.text()).toContain("Example");
+  });
+
+  it("renders the settings page shell with tab roles and emits v-model updates", async () => {
+    const wrapper = mount(SettingsPage, {
+      props: {
+        title: "Settings",
+        tabs: [
+          { id: "profile", label: "Profile" },
+          { id: "statuses", label: "Statuses" },
+        ],
+        activeTab: "profile",
+      },
+      slots: { default: "<p>profile content</p>" },
+    });
+    wrappers.push(wrapper);
+
+    expect(wrapper.find(".settings-page-title").text()).toBe("Settings");
+    const tabs = wrapper.findAll('[role="tab"]');
+    expect(tabs).toHaveLength(2);
+    expect(tabs[0].classes()).toContain("settings-page-tab-active");
+    expect(tabs[0].attributes("aria-selected")).toBe("true");
+    expect(tabs[1].attributes("aria-selected")).toBe("false");
+
+    const panel = wrapper.get('[role="tabpanel"]');
+    expect(panel.text()).toContain("profile content");
+    expect(panel.attributes("aria-labelledby")).toBe(tabs[0].attributes("id"));
+    expect(tabs[0].attributes("aria-controls")).toBe(panel.attributes("id"));
+
+    await tabs[1].trigger("click");
+    expect(wrapper.emitted("update:activeTab")).toEqual([["statuses"]]);
+  });
+
+  it("renders the settings page title slot and ignores clicks on the active tab", async () => {
+    const wrapper = mount(SettingsPage, {
+      props: {
+        tabs: [{ id: "profile", label: "Profile" }],
+        activeTab: "profile",
+      },
+      slots: { title: "<span>Custom title</span>", default: "content" },
+    });
+    wrappers.push(wrapper);
+
+    expect(wrapper.text()).toContain("Custom title");
+    await wrapper.find('[role="tab"]').trigger("click");
+    expect(wrapper.emitted("update:activeTab")).toBeUndefined();
   });
 
   it("shows the offline banner when the browser goes offline", async () => {

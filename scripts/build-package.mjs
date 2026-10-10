@@ -31,6 +31,7 @@ try {
     "components/AlertMessages.vue",
     "components/AppNavigation.vue",
     "components/OfflineBanner.vue",
+    "components/SettingsPage.vue",
     "composables/EventBus.ts",
     "services/AuthService.ts",
     "stores/AuthenticationStore.ts",

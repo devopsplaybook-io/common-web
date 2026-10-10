@@ -29,6 +29,7 @@ required. The `playground/` directory demonstrates a consuming app.
 | `<AlertMessages />` | Accessible live region displaying messages emitted on `EventBus`. |
 | `<AppNavigation :links="links" />` | Navigation shell with a named `brand` slot and configurable links (`label`, `to`, optional `icon` and `active`). |
 | `<OfflineBanner />` | Announces offline status and accepts replacement content through its default slot. |
+| `<SettingsPage :tabs="tabs" v-model:active-tab="activeTab" />` | Full-width settings page shell: a `title` slot (or `title` prop), a tab bar (`tabs` entries with `id`, `label`, optional `icon`) bound through `v-model:active-tab`, and one panel slot with `tablist`/`tab`/`tabpanel` roles. |
 
 `AlertMessages` listens for `EventTypes.ALERT_MESSAGE` events. Its payload is
 `{ text, type?, durationMs? }`; the default display duration is five seconds.

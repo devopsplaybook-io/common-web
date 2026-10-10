@@ -5,6 +5,14 @@ All notable changes to this project are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-10-10
+
+### Added
+
+- `SettingsPage` component: an accessible, full-width settings page shell with
+  a `title` slot, a `v-model:active-tab` tab bar (`id`, `label`, optional
+  `icon` per tab) and one panel slot for the active tab content.
+
 ## [0.3.0] - 2026-09-28
 
 ### Added
