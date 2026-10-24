@@ -5,6 +5,20 @@ All notable changes to this project are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-10-24
+
+### Changed
+
+- Refresh the development toolchain: Nuxt `^4.6.2`, Vitest and
+  `@vitest/coverage-v8` `^5.0.5`, and a regenerated lockfile. The production
+  dependency audit now reports no vulnerabilities.
+- Run `PR Check` and `Main Build` as repository-local equivalents of the shared
+  `common-utils` npm workflows: the blocking gate covers runtime dependencies
+  only (`npm audit --omit=dev --audit-level=high`) and the full audit is
+  reported without failing the build.
+- Document the dependency audit policy and the accepted development-only
+  advisories in `CONTRIBUTING.md`.
+
 ## [0.3.0] - 2026-09-28
 
 ### Added

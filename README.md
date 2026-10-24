@@ -102,12 +102,13 @@ features, and major for breaking API or framework changes. The merge workflow
 publishes a new public npm version when the package version is not already
 published; bump `package.json` manually on the release PR.
 
-The initial bootstrap PR uses a repository-local workflow that runs install,
-audit, lint, packed-package tests, and the playground build. This is necessary
-because the shared PR workflow compares against `origin/main:package.json`,
-which does not exist before this first package change. Once the manifest is on
-`main`, PRs use the shared npm PR workflow; main builds always use the shared
-publish workflow.
+`PR Check` and `Main Build` run repository-local versions of the shared npm
+workflows so the audit gate can cover production dependencies only;
+development-toolchain advisories are reported but do not fail the build. See
+[CONTRIBUTING.md](CONTRIBUTING.md#dependency-audit-policy) for the policy and
+the accepted development-only advisories. The local jobs are a stop-gap until
+the shared `common-utils` npm workflows adopt the same gate; the `PR Check`
+bootstrap job is retained for the case where `main` has no package manifest.
 
 ## Development
 
