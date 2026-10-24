@@ -42,8 +42,10 @@ required. The `playground/` directory demonstrates a consuming app.
 - `useAppHeight()` updates `--app-height` from `visualViewport` when available
   and cleans up resize listeners on unmount.
 - `useOfflineStatus()` returns a reactive `isOnline` ref.
-- Browser services are available through package deep imports, for example
-  `@devopsplaybook.io/common-web/services/AuthService`.
+- Services are browser-only and available through package deep imports, for
+  example `@devopsplaybook.io/common-web/services/AuthService`. `AuthService`
+  guards every `localStorage` access, so during SSR `getToken()` resolves
+  `null` and `saveToken()` / `removeToken()` are no-ops.
 - `createAuthenticationStore()` returns the Pinia store definition; `Pinia`
   must be available in the consuming app.
 
@@ -54,6 +56,26 @@ When an authenticated token has entered the final 20% of its lifetime,
 `AuthService` renews it through `POST /api/users/session/refresh` before
 returning it from `getToken()` or `getAuthHeader()`. This extends active
 sessions without requiring users to sign in again.
+
+`getToken()` never rejects because of the stored or renewed token:
+
+- A corrupt or undecodable token is treated as signed out: every auth key is
+  removed, `AUTH_UPDATED` is emitted and `null` is returned. Expired tokens are
+  removed and return `null`.
+- A `401` or `403` from the refresh endpoint means the session was revoked:
+  the session is cleared, `AUTH_UPDATED` is emitted and `null` is returned.
+- Timeouts and invalid renewal responses perform a single request. Network
+  errors and `5xx` responses retry once after a 500 ms backoff.
+- When renewal still fails, the still-valid current token is returned and
+  further renewal attempts for that token are paused for 30 seconds, so a slow
+  or failing refresh endpoint is not retried on every authenticated call. The
+  worst case is about 20.5 seconds per call for network/`5xx` failures and
+  about 10 seconds for timeouts or invalid responses.
+- Renewal requests time out after 10 seconds and concurrent calls share a
+  single request. A token saved while a renewal is in flight wins over the
+  renewed value.
+- Renewed tokens are validated (decodable, non-empty, future `exp`, and
+  `exp > iat` when `iat` is present) before they are persisted.
 
 ## Tokens and app-shell styles
 

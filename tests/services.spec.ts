@@ -6,18 +6,35 @@ import { PreferencesService } from "@devopsplaybook.io/common-web/services/Prefe
 import { RefreshIntervalService } from "@devopsplaybook.io/common-web/services/RefreshIntervalService";
 import { Timeout } from "@devopsplaybook.io/common-web/services/Timeout";
 import { UserService } from "@devopsplaybook.io/common-web/services/UserService";
+import {
+  EventBus,
+  EventTypes,
+} from "@devopsplaybook.io/common-web/composables/EventBus";
+
+function tokenFromPayload(payload: Record<string, unknown>): string {
+  const encoded = btoa(JSON.stringify(payload));
+  return `header.${encoded}.signature`;
+}
 
 function tokenWithExpiry(
   exp: number,
   iat = Math.floor(Date.now() / 1000),
 ): string {
-  const payload = btoa(
-    JSON.stringify({ exp, iat }),
-  );
-  return `header.${payload}.signature`;
+  return tokenFromPayload({ exp, iat });
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
 }
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   localStorage.clear();
   vi.restoreAllMocks();
   vi.useRealTimers();
@@ -61,7 +78,10 @@ describe("shared services", () => {
     expect(post).toHaveBeenCalledWith(
       "/api/users/session/refresh",
       {},
-      { headers: { Authorization: `Bearer ${oldToken}` } },
+      {
+        headers: { Authorization: `Bearer ${oldToken}` },
+        timeout: 10_000,
+      },
     );
   });
 
@@ -108,5 +128,271 @@ describe("shared services", () => {
     vi.advanceTimersByTime(1);
     await wait;
     expect(settled).toBe(true);
+  });
+});
+
+describe("AuthService session hardening", () => {
+  it("treats a corrupt stored token as signed out", async () => {
+    localStorage.setItem("auth_token", "not-a-jwt");
+    localStorage.setItem("AUTH_TOKEN", "legacy-corrupt");
+    localStorage.setItem("AUTH_TOKEN_KEY", "legacy-corrupt-key");
+    const listener = vi.fn();
+    const post = vi.spyOn(axios, "post");
+    EventBus.on(EventTypes.AUTH_UPDATED, listener);
+
+    try {
+      await expect(AuthService.getToken()).resolves.toBeNull();
+      expect(localStorage.getItem("auth_token")).toBeNull();
+      expect(localStorage.getItem("AUTH_TOKEN")).toBeNull();
+      expect(localStorage.getItem("AUTH_TOKEN_KEY")).toBeNull();
+      expect(post).not.toHaveBeenCalled();
+      expect(listener).toHaveBeenCalledTimes(1);
+    } finally {
+      EventBus.off(EventTypes.AUTH_UPDATED, listener);
+    }
+  });
+
+  it("treats a corrupt migrated legacy token as signed out", async () => {
+    localStorage.setItem("AUTH_TOKEN", "not-a-jwt");
+    const listener = vi.fn();
+    EventBus.on(EventTypes.AUTH_UPDATED, listener);
+
+    try {
+      await expect(AuthService.getToken()).resolves.toBeNull();
+      expect(localStorage.getItem("auth_token")).toBeNull();
+      expect(localStorage.getItem("AUTH_TOKEN")).toBeNull();
+      expect(listener).toHaveBeenCalledTimes(1);
+    } finally {
+      EventBus.off(EventTypes.AUTH_UPDATED, listener);
+    }
+  });
+
+  it("keeps auth helpers non-throwing for a corrupt token", async () => {
+    localStorage.setItem("auth_token", "not-a-jwt");
+
+    await expect(AuthService.isAuthenticated()).resolves.toBe(false);
+    await expect(AuthService.getAuthHeader()).resolves.toEqual({});
+  });
+
+  it("returns the current token when renewal times out", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-24T12:00:00Z"));
+    const now = Math.floor(Date.now() / 1000);
+    const token = tokenWithExpiry(now + 100, now - 3601);
+    localStorage.setItem("auth_token", token);
+    const post = vi
+      .spyOn(axios, "post")
+      .mockRejectedValue({ isAxiosError: true, code: "ECONNABORTED" });
+
+    await expect(AuthService.getToken()).resolves.toBe(token);
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(post).toHaveBeenCalledWith(
+      "/api/users/session/refresh",
+      {},
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: 10_000,
+      },
+    );
+    expect(localStorage.getItem("auth_token")).toBe(token);
+  });
+
+  it("retries a network failure once, then pauses renewal for that token", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-24T12:10:00Z"));
+    const now = Math.floor(Date.now() / 1000);
+    const token = tokenWithExpiry(now + 100, now - 3602);
+    localStorage.setItem("auth_token", token);
+    const post = vi
+      .spyOn(axios, "post")
+      .mockRejectedValue(new Error("network is down"));
+
+    const first = AuthService.getToken();
+    await vi.advanceTimersByTimeAsync(600);
+    await expect(first).resolves.toBe(token);
+    expect(post).toHaveBeenCalledTimes(2);
+
+    await expect(AuthService.getToken()).resolves.toBe(token);
+    expect(post).toHaveBeenCalledTimes(2);
+
+    vi.setSystemTime(Date.now() + 30_001);
+    const later = AuthService.getToken();
+    await vi.advanceTimersByTimeAsync(600);
+    await expect(later).resolves.toBe(token);
+    expect(post).toHaveBeenCalledTimes(4);
+  });
+
+  it("retries a 5xx renewal failure once", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-24T12:20:00Z"));
+    const now = Math.floor(Date.now() / 1000);
+    const token = tokenWithExpiry(now + 100, now - 3603);
+    localStorage.setItem("auth_token", token);
+    const post = vi
+      .spyOn(axios, "post")
+      .mockRejectedValue({ isAxiosError: true, response: { status: 503 } });
+
+    const renewal = AuthService.getToken();
+    await vi.advanceTimersByTimeAsync(600);
+    await expect(renewal).resolves.toBe(token);
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(localStorage.getItem("auth_token")).toBe(token);
+  });
+
+  it("clears the session when renewal is rejected with 401", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const token = tokenWithExpiry(now + 100, now - 3604);
+    localStorage.setItem("auth_token", token);
+    const post = vi
+      .spyOn(axios, "post")
+      .mockRejectedValue({ isAxiosError: true, response: { status: 401 } });
+    const listener = vi.fn();
+    EventBus.on(EventTypes.AUTH_UPDATED, listener);
+
+    try {
+      await expect(AuthService.getToken()).resolves.toBeNull();
+      expect(post).toHaveBeenCalledTimes(1);
+      expect(localStorage.getItem("auth_token")).toBeNull();
+      expect(localStorage.getItem("AUTH_TOKEN")).toBeNull();
+      expect(localStorage.getItem("AUTH_TOKEN_KEY")).toBeNull();
+      expect(listener).toHaveBeenCalledTimes(1);
+    } finally {
+      EventBus.off(EventTypes.AUTH_UPDATED, listener);
+    }
+  });
+
+  it("clears the session when renewal is rejected with 403", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const token = tokenWithExpiry(now + 100, now - 3605);
+    localStorage.setItem("auth_token", token);
+    const post = vi
+      .spyOn(axios, "post")
+      .mockRejectedValue({ isAxiosError: true, response: { status: 403 } });
+    const listener = vi.fn();
+    EventBus.on(EventTypes.AUTH_UPDATED, listener);
+
+    try {
+      await expect(AuthService.getToken()).resolves.toBeNull();
+      expect(post).toHaveBeenCalledTimes(1);
+      expect(localStorage.getItem("auth_token")).toBeNull();
+      expect(listener).toHaveBeenCalledTimes(1);
+    } finally {
+      EventBus.off(EventTypes.AUTH_UPDATED, listener);
+    }
+  });
+
+  it("shares one renewal request between concurrent calls", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const token = tokenWithExpiry(now + 100, now - 3606);
+    const renewedToken = tokenWithExpiry(now + 3600, now);
+    localStorage.setItem("auth_token", token);
+    const pending = deferred<{ data: { token: string } }>();
+    const post = vi.spyOn(axios, "post").mockReturnValue(pending.promise);
+
+    const first = AuthService.getToken();
+    const second = AuthService.getToken();
+    await Promise.resolve();
+    pending.resolve({ data: { token: renewedToken } });
+
+    await expect(first).resolves.toBe(renewedToken);
+    await expect(second).resolves.toBe(renewedToken);
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem("auth_token")).toBe(renewedToken);
+  });
+
+  it("keeps a newer token saved while a renewal is in flight", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const oldToken = tokenWithExpiry(now + 100, now - 3607);
+    const newerToken = tokenWithExpiry(now + 7200, now);
+    const renewedToken = tokenWithExpiry(now + 3600, now);
+    localStorage.setItem("auth_token", oldToken);
+    const pending = deferred<{ data: { token: string } }>();
+    vi.spyOn(axios, "post").mockReturnValue(pending.promise);
+
+    const renewal = AuthService.getToken();
+    await Promise.resolve();
+    await AuthService.saveToken(newerToken);
+    pending.resolve({ data: { token: renewedToken } });
+
+    await expect(renewal).resolves.toBe(newerToken);
+    expect(localStorage.getItem("auth_token")).toBe(newerToken);
+  });
+
+  it("does not clear a re-established session on a stale 401", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const oldToken = tokenWithExpiry(now + 100, now - 3608);
+    const newerToken = tokenWithExpiry(now + 7200, now + 1);
+    localStorage.setItem("auth_token", oldToken);
+    const pending = deferred<{ data: { token: string } }>();
+    vi.spyOn(axios, "post").mockReturnValue(pending.promise);
+
+    const renewal = AuthService.getToken();
+    await Promise.resolve();
+    await AuthService.saveToken(newerToken);
+    pending.reject({ isAxiosError: true, response: { status: 401 } });
+
+    await expect(renewal).resolves.toBe(newerToken);
+    expect(localStorage.getItem("auth_token")).toBe(newerToken);
+  });
+
+  it.each([
+    { label: "a missing token", data: {}, offset: 11 },
+    { label: "an empty token", data: { token: "" }, offset: 12 },
+    { label: "a non-JWT token", data: { token: "not-a-jwt" }, offset: 13 },
+    {
+      label: "an expired token",
+      data: { token: tokenFromPayload({ exp: 1, iat: 1 }) },
+      offset: 14,
+    },
+    {
+      label: "a token without expiry",
+      data: { token: tokenFromPayload({ iat: 1_700_000_000 }) },
+      offset: 15,
+    },
+    {
+      label: "a token with an inconsistent claim window",
+      data: {
+        token: tokenFromPayload({
+          exp: Math.floor(Date.now() / 1000) + 100,
+          iat: Math.floor(Date.now() / 1000) + 200,
+        }),
+      },
+      offset: 16,
+    },
+  ])(
+    "returns the current token without retrying when renewal returns $label",
+    async ({ data, offset }) => {
+      const now = Math.floor(Date.now() / 1000);
+      const token = tokenWithExpiry(now + 100, now - 3600 - offset);
+      localStorage.setItem("auth_token", token);
+      const post = vi.spyOn(axios, "post").mockResolvedValue({ data });
+
+      await expect(AuthService.getToken()).resolves.toBe(token);
+      expect(post).toHaveBeenCalledTimes(1);
+      expect(localStorage.getItem("auth_token")).toBe(token);
+
+      await expect(AuthService.getToken()).resolves.toBe(token);
+      expect(post).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("returns null without requesting renewal when no token is stored", async () => {
+    const post = vi.spyOn(axios, "post");
+
+    await expect(AuthService.getToken()).resolves.toBeNull();
+    await expect(AuthService.isAuthenticated()).resolves.toBe(false);
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it("works without localStorage during SSR", async () => {
+    vi.stubGlobal("localStorage", undefined);
+    const post = vi.spyOn(axios, "post");
+
+    await expect(AuthService.getToken()).resolves.toBeNull();
+    await expect(AuthService.isAuthenticated()).resolves.toBe(false);
+    await expect(AuthService.getAuthHeader()).resolves.toEqual({});
+    await expect(AuthService.saveToken("token")).resolves.toBeUndefined();
+    await expect(AuthService.removeToken()).resolves.toBeUndefined();
+    expect(post).not.toHaveBeenCalled();
   });
 });
