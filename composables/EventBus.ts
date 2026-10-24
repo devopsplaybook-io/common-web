@@ -1,11 +1,15 @@
 import mitt from "mitt";
 
+export type AlertType = "info" | "success" | "warning" | "error";
+
 export interface AlertMessage {
-  type?: "info" | "success" | "warning" | "error" | string;
+  type?: AlertType;
   text: string;
   durationMs?: number;
 }
 
+// mitt's Emitter constraint requires string and symbol index signatures;
+// the explicit ALERT_MESSAGE/AUTH_UPDATED keys keep their payload typing.
 interface AppEvents {
   [event: string]: unknown;
   [event: symbol]: unknown;

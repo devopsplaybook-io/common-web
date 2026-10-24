@@ -5,10 +5,14 @@
     </div>
     <ul class="app-navigation-links">
       <li v-for="link in links" :key="link.to">
-        <a :href="link.to" :aria-current="link.active ? 'page' : undefined">
+        <component
+          :is="linkComponent"
+          v-bind="linkProps(link)"
+          :aria-current="link.active ? 'page' : undefined"
+        >
           <span v-if="link.icon" :class="link.icon" aria-hidden="true" />
           {{ link.label }}
-        </a>
+        </component>
       </li>
     </ul>
     <slot />
@@ -16,6 +20,8 @@
 </template>
 
 <script setup lang="ts">
+import type { Component } from "vue";
+
 interface AppNavigationLink {
   label: string;
   to: string;
@@ -23,7 +29,17 @@ interface AppNavigationLink {
   active?: boolean;
 }
 
-defineProps<{ links: AppNavigationLink[] }>();
+const props = withDefaults(
+  defineProps<{
+    links: AppNavigationLink[];
+    linkComponent?: string | Component;
+  }>(),
+  { linkComponent: "a" },
+);
+
+function linkProps(link: AppNavigationLink): { href: string } | { to: string } {
+  return props.linkComponent === "a" ? { href: link.to } : { to: link.to };
+}
 </script>
 
 <style>

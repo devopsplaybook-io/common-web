@@ -1,7 +1,9 @@
 import { onMounted, onUnmounted, ref } from "vue";
 
 export function useOfflineStatus() {
-  const isOnline = ref(true);
+  const isOnline = ref(
+    typeof navigator === "undefined" ? true : navigator.onLine,
+  );
 
   function updateStatus(): void {
     isOnline.value = navigator.onLine;

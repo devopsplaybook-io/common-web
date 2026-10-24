@@ -1,6 +1,6 @@
 <template>
   <div id="page-layout">
-    <AppNavigation :links="links">
+    <AppNavigation :links="links" :link-component="NuxtLink">
       <template #brand>
         <strong>Common Web Playground</strong>
       </template>
@@ -14,6 +14,9 @@
 </template>
 
 <script setup lang="ts">
+import { resolveComponent } from "vue";
+
+const NuxtLink = resolveComponent("NuxtLink");
 const links = [{ label: "Home", to: "/" }];
 useAppHeight();
 </script>
