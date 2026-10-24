@@ -77,6 +77,65 @@ sessions without requiring users to sign in again.
 - Renewed tokens are validated (decodable, non-empty, future `exp`, and
   `exp > iat` when `iat` is present) before they are persisted.
 
+## Authentication state and HTTP integration
+
+`AuthService.saveToken()` and `removeToken()` emit
+`EventTypes.AUTH_UPDATED` on the `EventBus` when the stored token actually
+changes; renewal and expiry go through those methods. The Pinia store subscribes
+to the event and refreshes `isAuthenticated`, so a renewal, a logout in another
+tab or an expired token no longer leaves the UI stale. Call the additive
+`refreshAuthentication()` action for a manual refresh; `ensureAuthenticated()`
+still loads the initial state. The store also listens for the browser `storage`
+event, which synchronises token changes across tabs.
+
+Bearer-token attachment is opt-in: the layer ships only the registration helper
+and does not register a plugin, so existing applications keep their current
+behaviour. Add a client plugin in the consuming application when the default
+Axios instance should authenticate requests and clear the session on `401`:
+
+```ts
+// plugins/auth.client.ts
+import { registerAxiosAuthInterceptors } from "@devopsplaybook.io/common-web/services/AxiosAuthInterceptor";
+
+export default defineNuxtPlugin(() => {
+  registerAxiosAuthInterceptors();
+});
+```
+
+`registerAxiosAuthInterceptors(instance?)` attaches `Authorization: Bearer
+<token>` only when the request has no explicit `Authorization` header, and is
+idempotent per Axios instance (it returns `false` when already registered). It
+preserves an explicit header without renewing the token, and does not clear the
+session on a failed login to a path ending in `/users/session`; a `401` from
+any other endpoint (including `/users/session/refresh`) removes the stored token
+and emits `AUTH_UPDATED`.
+
+### Server URL configuration
+
+`Config.get()` returns `{ SERVER_URL: "/api" }` by default. Inject a different
+base URL, for example from a Nuxt client plugin, and reset it for tests:
+
+```ts
+import Config from "@devopsplaybook.io/common-web/services/Config";
+
+Config.set({ SERVER_URL: "https://api.example.com" });
+await Config.get(); // { SERVER_URL: "https://api.example.com" }
+Config.reset(); // back to "/api"
+```
+
+A non-same-origin `SERVER_URL` receives the bearer token when the opt-in Axios
+integration is used, so it must use HTTPS and allow the application origin
+through CORS.
+
+### Service fallbacks
+
+`UserService.isInitialized()` resolves `false` on network or HTTP errors
+instead of rejecting, so setup code can gate on it safely.
+`RefreshIntervalService.get()` falls back to `"10000"` when the stored value is
+missing or malformed; `set()` normalises valid non-negative integer strings
+(for example `"05000"` becomes `"5000"`) and throws `TypeError` otherwise.
+`"0"` is valid and keeps polling disabled.
+
 ## Tokens and app-shell styles
 
 The layer loads `assets/css/tokens.css` and `assets/css/app-shell.css`.

@@ -49,15 +49,20 @@ export class AuthService {
   static async saveToken(token: string): Promise<void> {
     const storage = AuthService.storage();
     if (!storage) return;
+    const previous = storage.getItem(AUTH_TOKEN_KEY);
     storage.setItem(AUTH_TOKEN_KEY, token);
     for (const key of LEGACY_TOKEN_KEYS) storage.removeItem(key);
+    if (previous !== token) AuthService.emitAuthUpdated();
   }
 
   static async removeToken(_token?: string): Promise<void> {
     const storage = AuthService.storage();
     if (!storage) return;
-    storage.removeItem(AUTH_TOKEN_KEY);
-    for (const key of LEGACY_TOKEN_KEYS) storage.removeItem(key);
+    const keys = [AUTH_TOKEN_KEY, ...LEGACY_TOKEN_KEYS];
+    const present = keys.filter((key) => storage.getItem(key) !== null);
+    if (present.length === 0) return;
+    for (const key of keys) storage.removeItem(key);
+    AuthService.emitAuthUpdated();
   }
 
   static async getToken(): Promise<string | null> {
@@ -131,7 +136,10 @@ export class AuthService {
 
   private static async clearSession(): Promise<void> {
     await AuthService.removeToken();
-    EventBus.emit(EventTypes.AUTH_UPDATED);
+  }
+
+  private static emitAuthUpdated(): void {
+    EventBus.emit(EventTypes.AUTH_UPDATED, undefined);
   }
 
   private static async renewToken(token: string): Promise<string | null> {
