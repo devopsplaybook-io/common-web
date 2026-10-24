@@ -36,6 +36,8 @@ function deferred<T>() {
 afterEach(() => {
   vi.unstubAllGlobals();
   localStorage.clear();
+  Config.reset();
+  EventBus.all.clear();
   vi.restoreAllMocks();
   vi.useRealTimers();
 });
@@ -44,20 +46,34 @@ describe("shared services", () => {
   it("reads legacy auth storage keys and migrates to auth_token", async () => {
     const token = tokenWithExpiry(Date.now() / 1000 + 3600);
     localStorage.setItem("AUTH_TOKEN", token);
+    const listener = vi.fn();
+    EventBus.on(EventTypes.AUTH_UPDATED, listener);
 
-    expect(await AuthService.getToken()).toBe(token);
-    expect(localStorage.getItem("auth_token")).toBe(token);
-    expect(localStorage.getItem("AUTH_TOKEN")).toBeNull();
-    expect(await AuthService.getAuthHeader()).toEqual({
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    try {
+      expect(await AuthService.getToken()).toBe(token);
+      expect(localStorage.getItem("auth_token")).toBe(token);
+      expect(localStorage.getItem("AUTH_TOKEN")).toBeNull();
+      expect(await AuthService.getAuthHeader()).toEqual({
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(listener).not.toHaveBeenCalled();
+    } finally {
+      EventBus.off(EventTypes.AUTH_UPDATED, listener);
+    }
   });
 
   it("removes expired tokens and reports unauthenticated", async () => {
     localStorage.setItem("auth_token", tokenWithExpiry(1));
+    const listener = vi.fn();
+    EventBus.on(EventTypes.AUTH_UPDATED, listener);
 
-    expect(await AuthService.isAuthenticated()).toBe(false);
-    expect(localStorage.getItem("auth_token")).toBeNull();
+    try {
+      expect(await AuthService.isAuthenticated()).toBe(false);
+      expect(localStorage.getItem("auth_token")).toBeNull();
+      expect(listener).toHaveBeenCalledTimes(1);
+    } finally {
+      EventBus.off(EventTypes.AUTH_UPDATED, listener);
+    }
   });
 
   it("renews a token near expiry before returning it", async () => {
@@ -70,19 +86,26 @@ describe("shared services", () => {
     const post = vi.spyOn(axios, "post").mockResolvedValue({
       data: { success: true, token: renewedToken },
     });
+    const listener = vi.fn();
+    EventBus.on(EventTypes.AUTH_UPDATED, listener);
 
-    expect(await AuthService.getAuthHeader()).toEqual({
-      headers: { Authorization: `Bearer ${renewedToken}` },
-    });
-    expect(localStorage.getItem("auth_token")).toBe(renewedToken);
-    expect(post).toHaveBeenCalledWith(
-      "/api/users/session/refresh",
-      {},
-      {
-        headers: { Authorization: `Bearer ${oldToken}` },
-        timeout: 10_000,
-      },
-    );
+    try {
+      expect(await AuthService.getAuthHeader()).toEqual({
+        headers: { Authorization: `Bearer ${renewedToken}` },
+      });
+      expect(localStorage.getItem("auth_token")).toBe(renewedToken);
+      expect(post).toHaveBeenCalledWith(
+        "/api/users/session/refresh",
+        {},
+        {
+          headers: { Authorization: `Bearer ${oldToken}` },
+          timeout: 10_000,
+        },
+      );
+      expect(listener).toHaveBeenCalledTimes(1);
+    } finally {
+      EventBus.off(EventTypes.AUTH_UPDATED, listener);
+    }
   });
 
   it("does not renew a token while it has most of its lifetime remaining", async () => {
@@ -128,6 +151,150 @@ describe("shared services", () => {
     vi.advanceTimersByTime(1);
     await wait;
     expect(settled).toBe(true);
+  });
+});
+
+describe("auth state events", () => {
+  it("emits once when a token is saved and stays silent for an identical save", async () => {
+    const listener = vi.fn();
+    EventBus.on(EventTypes.AUTH_UPDATED, listener);
+
+    try {
+      const token = tokenWithExpiry(Math.floor(Date.now() / 1000) + 3600);
+      await AuthService.saveToken(token);
+      expect(listener).toHaveBeenCalledTimes(1);
+
+      await AuthService.saveToken(token);
+      expect(listener).toHaveBeenCalledTimes(1);
+    } finally {
+      EventBus.off(EventTypes.AUTH_UPDATED, listener);
+    }
+  });
+
+  it("emits once when a stored token is removed and not when nothing is stored", async () => {
+    const listener = vi.fn();
+    EventBus.on(EventTypes.AUTH_UPDATED, listener);
+
+    try {
+      await AuthService.removeToken();
+      expect(listener).not.toHaveBeenCalled();
+
+      await AuthService.saveToken(
+        tokenWithExpiry(Math.floor(Date.now() / 1000) + 3600),
+      );
+      expect(listener).toHaveBeenCalledTimes(1);
+
+      await AuthService.removeToken();
+      expect(listener).toHaveBeenCalledTimes(2);
+
+      await AuthService.removeToken();
+      expect(listener).toHaveBeenCalledTimes(2);
+    } finally {
+      EventBus.off(EventTypes.AUTH_UPDATED, listener);
+    }
+  });
+
+  it("emits once when a legacy token has to be removed", async () => {
+    localStorage.setItem("AUTH_TOKEN_KEY", "legacy-token");
+    const listener = vi.fn();
+    EventBus.on(EventTypes.AUTH_UPDATED, listener);
+
+    try {
+      await AuthService.removeToken();
+      expect(localStorage.getItem("AUTH_TOKEN_KEY")).toBeNull();
+      expect(listener).toHaveBeenCalledTimes(1);
+    } finally {
+      EventBus.off(EventTypes.AUTH_UPDATED, listener);
+    }
+  });
+});
+
+describe("Config injection", () => {
+  it("returns the default configuration and allows overrides", async () => {
+    expect(await Config.get()).toEqual({ SERVER_URL: "/api" });
+
+    Config.set({ SERVER_URL: "https://api.example.com" });
+    expect(await Config.get()).toEqual({
+      SERVER_URL: "https://api.example.com",
+    });
+
+    Config.reset();
+    expect(await Config.get()).toEqual({ SERVER_URL: "/api" });
+  });
+
+  it("routes UserService through the injected server URL", async () => {
+    Config.set({ SERVER_URL: "https://api.example.com" });
+    const get = vi.spyOn(axios, "get").mockResolvedValue({
+      data: { initialized: true },
+    });
+
+    expect(await UserService.isInitialized()).toBe(true);
+    expect(get).toHaveBeenCalledWith(
+      "https://api.example.com/users/status/initialization",
+    );
+  });
+});
+
+describe("UserService.isInitialized", () => {
+  it("resolves the initialization flag from the endpoint", async () => {
+    vi.spyOn(axios, "get").mockResolvedValue({
+      data: { initialized: false },
+    });
+    await expect(UserService.isInitialized()).resolves.toBe(false);
+
+    vi.spyOn(axios, "get").mockResolvedValue({
+      data: { initialized: true },
+    });
+    await expect(UserService.isInitialized()).resolves.toBe(true);
+  });
+
+  it("resolves false on network and HTTP errors instead of rejecting", async () => {
+    vi.spyOn(axios, "get").mockRejectedValue(new Error("network is down"));
+    await expect(UserService.isInitialized()).resolves.toBe(false);
+
+    vi.spyOn(axios, "get").mockRejectedValue({
+      isAxiosError: true,
+      response: { status: 500 },
+    });
+    await expect(UserService.isInitialized()).resolves.toBe(false);
+  });
+});
+
+describe("RefreshIntervalService", () => {
+  it("falls back to the default when no value is stored", () => {
+    expect(RefreshIntervalService.get()).toBe(RefreshIntervalService.DEFAULT);
+  });
+
+  it.each(["abc", "-1", "1.5", "", " "])(
+    "falls back to the default for the malformed stored value %j",
+    (value) => {
+      localStorage.setItem(RefreshIntervalService.KEY, value);
+      expect(RefreshIntervalService.get()).toBe(
+        RefreshIntervalService.DEFAULT,
+      );
+    },
+  );
+
+  it("normalises stored and supplied values", () => {
+    localStorage.setItem(RefreshIntervalService.KEY, "05000");
+    expect(RefreshIntervalService.get()).toBe("5000");
+
+    RefreshIntervalService.set("007500");
+    expect(RefreshIntervalService.get()).toBe("7500");
+    expect(localStorage.getItem(RefreshIntervalService.KEY)).toBe("7500");
+  });
+
+  it("accepts zero to keep polling disabled", () => {
+    RefreshIntervalService.set("0");
+    expect(RefreshIntervalService.get()).toBe("0");
+  });
+
+  it("rejects invalid values without touching the stored value", () => {
+    RefreshIntervalService.set("5000");
+
+    expect(() => RefreshIntervalService.set("abc")).toThrow(TypeError);
+    expect(() => RefreshIntervalService.set("1.5")).toThrow(TypeError);
+    expect(localStorage.getItem(RefreshIntervalService.KEY)).toBe("5000");
   });
 });
 

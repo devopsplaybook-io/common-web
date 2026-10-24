@@ -5,6 +5,33 @@ All notable changes to this project are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-10-24
+
+### Added
+
+- Propagate auth state changes: `AuthService` emits `AUTH_UPDATED` when a token
+  is saved, removed, renewed or expires; the authentication store subscribes and
+  refreshes `isAuthenticated`, and cross-tab token changes are synchronised
+  through the `storage` event. The additive `refreshAuthentication()` store
+  action is available for manual refreshes.
+- Opt-in Axios integration through `registerAxiosAuthInterceptors(instance)`:
+  attaches the stored bearer token only when no `Authorization` header is set,
+  clears the session on `401` except for the login endpoint (`/users/session`),
+  and registers once per Axios instance. No layer plugin is auto-registered, so
+  existing applications keep their current behaviour until they opt in.
+- `Config.set()` and `Config.reset()` inject or clear the `SERVER_URL` override
+  (`/api` by default).
+- Document the new event, the opt-in Axios helper and the configuration
+  injection point, including the HTTPS requirement for non-same-origin servers.
+
+### Changed
+
+- `UserService.isInitialized()` resolves `false` on network and HTTP failures
+  instead of rejecting.
+- `RefreshIntervalService.get()` validates the stored value and falls back to
+  `10000`; `set()` normalises valid values and throws `TypeError` for invalid
+  ones. `"0"` remains valid to disable polling.
+
 ## [0.5.0] - 2026-10-24
 
 ### Fixed

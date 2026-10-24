@@ -33,6 +33,7 @@ try {
     "components/OfflineBanner.vue",
     "composables/EventBus.ts",
     "services/AuthService.ts",
+    "services/AxiosAuthInterceptor.ts",
     "stores/AuthenticationStore.ts",
     "README.md",
     "CHANGELOG.md",

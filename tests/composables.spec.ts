@@ -1,11 +1,26 @@
 import { defineComponent, h, nextTick } from "vue";
-import { mount } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EventBus, EventTypes, handleError } from "@devopsplaybook.io/common-web/composables/EventBus";
 import { useAppHeight } from "@devopsplaybook.io/common-web/composables/useAppHeight";
 import { useTheme } from "@devopsplaybook.io/common-web/composables/useTheme";
+import {
+  AUTH_TOKEN_KEY,
+  AuthService,
+} from "@devopsplaybook.io/common-web/services/AuthService";
 import { AuthenticationStore } from "@devopsplaybook.io/common-web/stores/AuthenticationStore";
+
+function tokenWithExpiry(
+  exp: number,
+  iat = Math.floor(Date.now() / 1000),
+): string {
+  return `header.${btoa(JSON.stringify({ exp, iat }))}.signature`;
+}
+
+function validToken(): string {
+  return tokenWithExpiry(Math.floor(Date.now() / 1000) + 3600);
+}
 
 afterEach(() => {
   localStorage.clear();
@@ -78,6 +93,50 @@ describe("composables and event utilities", () => {
     const authentication = AuthenticationStore();
 
     expect(await authentication.ensureAuthenticated()).toBe(false);
+    expect(authentication.isAuthenticated).toBe(false);
+  });
+});
+
+describe("authentication store reactivity", () => {
+  it("refreshes on token save and removal without an explicit call", async () => {
+    setActivePinia(createPinia());
+    const authentication = AuthenticationStore();
+    expect(authentication.isAuthenticated).toBe(false);
+
+    await AuthService.saveToken(validToken());
+    await flushPromises();
+    expect(authentication.isAuthenticated).toBe(true);
+
+    await AuthService.removeToken();
+    await flushPromises();
+    expect(authentication.isAuthenticated).toBe(false);
+  });
+
+  it("turns false when getToken discards an expired token", async () => {
+    setActivePinia(createPinia());
+    const authentication = AuthenticationStore();
+    await AuthService.saveToken(validToken());
+    await flushPromises();
+    expect(authentication.isAuthenticated).toBe(true);
+
+    localStorage.setItem(AUTH_TOKEN_KEY, tokenWithExpiry(1));
+    await expect(AuthService.getToken()).resolves.toBeNull();
+    await flushPromises();
+
+    expect(authentication.isAuthenticated).toBe(false);
+  });
+
+  it("turns false on a cross-tab token removal", async () => {
+    setActivePinia(createPinia());
+    const authentication = AuthenticationStore();
+    await AuthService.saveToken(validToken());
+    await authentication.ensureAuthenticated();
+    expect(authentication.isAuthenticated).toBe(true);
+
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    window.dispatchEvent(new StorageEvent("storage", { key: AUTH_TOKEN_KEY }));
+    await flushPromises();
+
     expect(authentication.isAuthenticated).toBe(false);
   });
 });
