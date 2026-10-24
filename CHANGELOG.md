@@ -5,6 +5,39 @@ All notable changes to this project are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-10-24
+
+### Added
+
+- Package metadata: `repository`, `homepage`, `bugs` and a conservative
+  `sideEffects` whitelist (CSS and `.vue` files are never tree-shaken;
+  the `.ts` modules are side-effect-free at import time). No `types` entry is
+  added because the package intentionally ships raw sources with no build step;
+  this is now documented in the README.
+- axe-core accessibility gate: `tests/accessibility.spec.ts` mounts every
+  shipped component in a real DOM tree and fails on axe violations
+  (`color-contrast` is covered by the packed-tokens contrast test instead,
+  because jsdom cannot compute rendered contrast).
+- Coverage thresholds in `vitest.config.ts` (statements 95%, branches 88%,
+  functions 99%, lines 97%) so coverage regressions fail `npm test`.
+
+### Changed
+
+- `scripts/build-package.mjs` now derives `requiredFiles` from the public
+  source directories plus the fixed root assets, so every public file is
+  required and packaging regressions fail `npm run build` instead of shipping
+  silently.
+- Removed the dead `base-package` and `bootstrap-checks` jobs from `PR Check`;
+  `main` has had a package manifest since 0.4.0, so the bootstrap path could
+  never run. `version-check` now always runs.
+- README: removed the stale bootstrap-workflow note and added "SSR and
+  client-only usage" plus "Packaging, types and side effects" documenting the
+  delivered behavior. CONTRIBUTING: documented the coverage and accessibility
+  gates.
+- `.gitignore` now excludes environment files (`.env`, `.env.*` with an
+  `!.env.example` exception) and key material (`*.pem`, `*.key`). No secret is
+  committed today; this is cheap hardening. No consumer-facing API change.
+
 ## [0.7.0] - 2026-10-24
 
 ### Added

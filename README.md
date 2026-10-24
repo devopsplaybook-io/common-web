@@ -174,6 +174,28 @@ missing or malformed; `set()` normalises valid non-negative integer strings
 (for example `"05000"` becomes `"5000"`) and throws `TypeError` otherwise.
 `"0"` is valid and keeps polling disabled.
 
+## SSR and client-only usage
+
+The layer is SSR-compatible: the components render on the server, and the
+composables guard their browser-only access.
+
+- `useTheme()` guards `document` and `localStorage` (`applyTheme()` returns
+  early when `document` is missing; storage writes are skipped), and reads the
+  stored preference and media query in `onMounted`, which never runs during SSR.
+- `useOfflineStatus()` defaults `isOnline` to `true` when `navigator` is
+  missing, and registers its listeners in `onMounted`.
+- `useAppHeight()` touches `window` only inside `onMounted`.
+- `AuthService` guards every `localStorage` access: during SSR `getToken()`
+  resolves `null` and `saveToken()` / `removeToken()` are no-ops.
+
+Token storage, session renewal, `AUTH_UPDATED` propagation, cross-tab
+synchronisation and the opt-in Axios integration are browser-only: register the
+Axios helper from a `.client.ts` plugin as shown above, and expect the
+authentication state to become meaningful only after hydration.
+`PreferencesService` and `RefreshIntervalService` access `localStorage`
+unguarded and must only be called in the browser (a client plugin or a
+composable hook, never during SSR).
+
 ## Tokens and app-shell styles
 
 The layer loads `assets/css/tokens.css` and `assets/css/app-shell.css`.
@@ -231,8 +253,18 @@ workflows so the audit gate can cover production dependencies only;
 development-toolchain advisories are reported but do not fail the build. See
 [CONTRIBUTING.md](CONTRIBUTING.md#dependency-audit-policy) for the policy and
 the accepted development-only advisories. The local jobs are a stop-gap until
-the shared `common-utils` npm workflows adopt the same gate; the `PR Check`
-bootstrap job is retained for the case where `main` has no package manifest.
+the shared `common-utils` npm workflows adopt the same gate.
+
+### Packaging, types and side effects
+
+The package ships raw Vue and TypeScript sources with no build step, so there is
+deliberately no `types` or `exports.types` entry: type information comes from
+the `.ts`/`.vue` sources themselves and deep imports resolve through the
+`exports` map under Nuxt module resolution. `sideEffects` whitelists CSS and
+`.vue` files so component styles and the token stylesheets are never
+tree-shaken, while the side-effect-free `.ts` modules can be. `npm run build`
+fails when any public file is missing from the packed tarball, and the packed
+archive is what `npm test` runs against.
 
 ## Development
 

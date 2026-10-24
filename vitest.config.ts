@@ -30,6 +30,12 @@ export default defineConfig({
           ]
         : ["composables/*.ts", "services/*.ts", "stores/*.ts"],
       reporter: ["text", "json", "clover"],
+      thresholds: {
+        statements: 95,
+        branches: 88,
+        functions: 99,
+        lines: 97,
+      },
     },
   },
 });
