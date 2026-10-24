@@ -27,10 +27,12 @@
   }
 }
 
-.dpb-fade-in {
-  animation: dpb-fade 180ms ease-out;
-}
+@media (prefers-reduced-motion: no-preference) {
+  .dpb-fade-in {
+    animation: dpb-fade 180ms ease-out;
+  }
 
-.dpb-blink {
-  animation: dpb-blink 1s ease-in-out infinite;
+  .dpb-blink {
+    animation: dpb-blink 1s ease-in-out infinite;
+  }
 }

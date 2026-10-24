@@ -5,6 +5,65 @@ All notable changes to this project are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-10-24
+
+### Added
+
+- Pre-paint theme script: the layer injects a small inline `<head>` script that
+  applies `data-theme` from `localStorage` and `prefers-color-scheme` before
+  first paint, removing the flash of the light theme for users with a stored
+  dark preference. Applications with a strict CSP must allow this inline script
+  (nonce or `unsafe-inline`); without it the existing `prefers-color-scheme`
+  CSS path still applies.
+- Per-status foreground tokens `--color-on-success`, `--color-on-error` and
+  `--color-on-warning` so status backgrounds and their text meet WCAG AA in
+  both themes, with an automated contrast test over the shipped tokens.
+- `AppNavigation` accepts a `linkComponent` prop (default `"a"`) so Nuxt apps
+  can opt into SPA navigation with `resolveComponent("NuxtLink")` instead of
+  full page reloads.
+- `OfflineBanner` accepts a `message` prop (default `"You are offline."`) and
+  keeps its `role="status"` live region mounted at all times, so the offline
+  announcement is not missed by screen readers; while online the region is
+  visually hidden.
+- `AlertMessages` supports sticky alerts with `durationMs: 0`, deduplicates
+  identical `type` + `text` pairs, and caps the queue at five messages (oldest
+  dropped first).
+- Respect `prefers-reduced-motion`: the loading spinner, `dpb-fade-in` and
+  `dpb-blink` animations are disabled under reduced motion.
+
+### Changed
+
+- `useTheme().isDark` is now the effective theme: under the default `system`
+  preference it follows `prefers-color-scheme` (including live media changes),
+  and `toggleTheme()` toggles from the effective value instead of only an
+  explicit `dark` preference.
+- Alert styles are prefixed: `.message*` selectors are renamed to
+  `.alert-message*` (`.alert-message`, `.alert-message-text`,
+  `.alert-message-{type}`) so they no longer collide with consumer styles.
+  This is the only consumer-facing class change.
+- `useAppHeight()` coalesces resize updates with `requestAnimationFrame`, so
+  repeated resize events and multiple component instances write the CSS custom
+  property at most once per frame.
+- `useOfflineStatus()` initialises `isOnline` from `navigator.onLine`, so a
+  page loaded offline no longer briefly renders as online.
+- `AlertMessage.type` is narrowed to `"info" | "success" | "warning" | "error"`
+  instead of collapsing to `string`, and the mitt compatibility index
+  signatures are documented.
+- `AuthService.removeToken()` documents that its optional argument is accepted
+  for API compatibility and ignored.
+
+### Fixed
+
+- Dark-mode status colors failed WCAG AA against white text (warning 1.86:1,
+  success/info 3.30:1, error 4.23:1). Dark backgrounds now use `#171717` text
+  through the new `--color-on-*` tokens, and dark `--color-error` changed from
+  `#e53935` to `#ef5350` because the old value cannot reach 4.5:1 with either
+  white or `#171717` text. Light mode is unchanged and passes.
+- The playground theme button showed "Switch to dark" on an already-dark page
+  under the `system` preference; `toggleTheme()` now toggles correctly.
+- The offline banner no longer claims "showing cached data"; the layer provides
+  no cache and the default copy is now neutral.
+
 ## [0.6.0] - 2026-10-24
 
 ### Added

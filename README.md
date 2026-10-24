@@ -25,23 +25,61 @@ required. The `playground/` directory demonstrates a consuming app.
 
 | Component | Purpose |
 | --- | --- |
-| `<Loading size="small" />` | Accessible loading indicator; `size` is `small` or `large`. |
+| `<Loading size="small" />` | Accessible loading indicator; `size` is `small` or `large`. The animation is disabled under `prefers-reduced-motion: reduce`. |
 | `<AlertMessages />` | Accessible live region displaying messages emitted on `EventBus`. |
-| `<AppNavigation :links="links" />` | Navigation shell with a named `brand` slot and configurable links (`label`, `to`, optional `icon` and `active`). |
-| `<OfflineBanner />` | Announces offline status and accepts replacement content through its default slot. |
+| `<AppNavigation :links="links" :link-component="NuxtLink" />` | Navigation shell with a named `brand` slot and configurable links (`label`, `to`, optional `icon` and `active`). |
+| `<OfflineBanner message="You are offline." />` | Announces offline status and accepts replacement content through its default slot. |
 
 `AlertMessages` listens for `EventTypes.ALERT_MESSAGE` events. Its payload is
-`{ text, type?, durationMs? }`; the default display duration is five seconds.
-`handleError(error)` logs the error and emits a corresponding error alert.
+`{ text, type?, durationMs? }` with `type` limited to `info`, `success`,
+`warning` or `error`. The default display duration is five seconds;
+`durationMs: 0` keeps the message until it is dismissed from the queue.
+Identical `type` + `text` pairs are deduplicated and the queue keeps at most
+five messages, dropping the oldest first. Alert styles use the prefixed
+`.alert-message*` classes, so consumer stylesheets are not affected by the
+layer's global styles. `handleError(error)` logs the error and emits a
+corresponding error alert.
+
+`AppNavigation` renders plain `<a href>` links by default, which keeps
+non-Nuxt deep imports and raw-source usage working. Nuxt applications should
+pass their link component to keep SPA state on navigation:
+
+```vue
+<script setup lang="ts">
+import { resolveComponent } from "vue";
+
+const NuxtLink = resolveComponent("NuxtLink");
+</script>
+
+<template>
+  <AppNavigation :links="links" :link-component="NuxtLink" />
+</template>
+```
+
+`OfflineBanner` keeps its `role="status"` live region mounted at all times so
+screen readers announce the transition; while online the region is visually
+hidden. The default copy is the neutral `You are offline.`; replace it with
+the `message` prop or the default slot.
 
 ## Composables and services
 
 - `useTheme()` persists `light`/`dark` preferences in `localStorage` and applies
-  `data-theme` to the document root. Use `setTheme("system")` to return to the
-  operating-system preference.
+  `data-theme` to the document root. `isDark` reflects the effective theme: the
+  default `system` preference follows `prefers-color-scheme`, including live
+  operating-system changes, and `toggleTheme()` toggles from that effective
+  value. Use `setTheme("system")` to return to the operating-system preference.
+  The layer also injects a small pre-paint `<head>` script that applies
+  `data-theme` from `localStorage` and `prefers-color-scheme` before first
+  paint, so a stored dark preference no longer flashes the light theme during
+  load. Applications with a strict CSP must allow this inline script (nonce or
+  `unsafe-inline`); without it, the `prefers-color-scheme` CSS path still
+  applies and the theme resolves after hydration.
 - `useAppHeight()` updates `--app-height` from `visualViewport` when available
-  and cleans up resize listeners on unmount.
-- `useOfflineStatus()` returns a reactive `isOnline` ref.
+  and cleans up resize listeners on unmount. Resize updates are coalesced with
+  `requestAnimationFrame`, so repeated resize events and multiple component
+  instances write the custom property at most once per frame.
+- `useOfflineStatus()` returns a reactive `isOnline` ref, initialised from
+  `navigator.onLine` so a page loaded offline renders offline immediately.
 - Services are browser-only and available through package deep imports, for
   example `@devopsplaybook.io/common-web/services/AuthService`. `AuthService`
   guards every `localStorage` access, so during SSR `getToken()` resolves
@@ -139,10 +177,15 @@ missing or malformed; `set()` normalises valid non-negative integer strings
 ## Tokens and app-shell styles
 
 The layer loads `assets/css/tokens.css` and `assets/css/app-shell.css`.
-Tokens include `--color-*`, `--space-*`, `--text-*`, `--radius-*`,
-`--shadow-*`, `--header-height`, and `--app-height`. Dark mode can be selected
-with `data-theme="dark"` or comes from `prefers-color-scheme` when no explicit
-light preference is set.
+Tokens include `--color-*` (including the per-status foreground tokens
+`--color-on-success`, `--color-on-error` and `--color-on-warning` used with
+`--color-success`, `--color-error` and `--color-warning`),
+`--space-*`, `--text-*`, `--radius-*`, `--shadow-*`, `--header-height`, and
+`--app-height`. Dark mode can be selected with `data-theme="dark"` or comes
+from `prefers-color-scheme` when no explicit light preference is set. Status
+colors meet WCAG AA against their `--color-on-*` foreground tokens in both
+themes. The `dpb-fade-in` and `dpb-blink` helper classes are disabled under
+`prefers-reduced-motion: reduce`.
 
 Load app-specific CSS after the layer and redefine only the values you need:
 

@@ -2,9 +2,13 @@
   <div role="status" aria-live="polite" class="alert-messages">
     <div v-for="message in messages" :key="message.id">
       <div
-        :class="message.type ? `message message-${message.type}` : 'message'"
+        :class="
+          message.type
+            ? `alert-message alert-message-${message.type}`
+            : 'alert-message'
+        "
       >
-        <span class="message-text">
+        <span class="alert-message-text">
           <b v-if="message.type">{{ message.type }}</b>
           {{ message.text }}
         </span>
@@ -21,35 +25,54 @@ interface DisplayMessage extends AlertMessage {
   id: number;
 }
 
+const DEFAULT_DURATION_MS = 5000;
+const MAX_MESSAGES = 5;
+
 const messages = ref<DisplayMessage[]>([]);
-const timers = new Set<ReturnType<typeof setTimeout>>();
+const timers = new Map<number, ReturnType<typeof setTimeout>>();
 let nextId = 1;
 
 function dismiss(id: number): void {
+  const timer = timers.get(id);
+  if (timer) {
+    clearTimeout(timer);
+    timers.delete(id);
+  }
   const index = messages.value.findIndex((message) => message.id === id);
   if (index !== -1) messages.value.splice(index, 1);
 }
 
 function handleAlert(message: AlertMessage): void {
+  const duplicate = messages.value.some(
+    (existing) => existing.type === message.type && existing.text === message.text,
+  );
+  if (duplicate) return;
+
   const entry = { ...message, id: nextId++ };
   messages.value.push(entry);
+  while (messages.value.length > MAX_MESSAGES) {
+    const oldest = messages.value[0];
+    if (oldest) dismiss(oldest.id);
+  }
+
+  if (message.durationMs === 0) return;
   const timer = setTimeout(() => {
-    timers.delete(timer);
+    timers.delete(entry.id);
     dismiss(entry.id);
-  }, message.durationMs || 5000);
-  timers.add(timer);
+  }, message.durationMs ?? DEFAULT_DURATION_MS);
+  timers.set(entry.id, timer);
 }
 
 onMounted(() => EventBus.on(EventTypes.ALERT_MESSAGE, handleAlert));
 onUnmounted(() => {
   EventBus.off(EventTypes.ALERT_MESSAGE, handleAlert);
-  for (const timer of timers) clearTimeout(timer);
+  for (const timer of timers.values()) clearTimeout(timer);
   timers.clear();
 });
 </script>
 
 <style>
-.message {
+.alert-message {
   display: flex;
   align-items: center;
   padding: var(--space-base, 1rem);
@@ -58,20 +81,23 @@ onUnmounted(() => {
   background-color: #546e7a;
 }
 
-.message-text {
+.alert-message-text {
   flex: 1;
 }
 
-.message-info,
-.message-success {
+.alert-message-info,
+.alert-message-success {
   background-color: var(--color-success, #2e7d32);
+  color: var(--color-on-success, #fff);
 }
 
-.message-warning {
+.alert-message-warning {
   background-color: var(--color-warning, #8a5a00);
+  color: var(--color-on-warning, #fff);
 }
 
-.message-error {
+.alert-message-error {
   background-color: var(--color-error, #c62828);
+  color: var(--color-on-error, #fff);
 }
 </style>

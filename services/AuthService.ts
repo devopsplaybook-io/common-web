@@ -55,6 +55,10 @@ export class AuthService {
     if (previous !== token) AuthService.emitAuthUpdated();
   }
 
+  /**
+   * Clears every stored token and emits `AUTH_UPDATED`. The optional argument
+   * is accepted for API compatibility with older callers and is ignored.
+   */
   static async removeToken(_token?: string): Promise<void> {
     const storage = AuthService.storage();
     if (!storage) return;

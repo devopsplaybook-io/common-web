@@ -28,13 +28,18 @@ withDefaults(defineProps<{ size?: "small" | "large"; label?: string }>(), {
     var(--loading-gradient) 50% 50%,
     var(--loading-gradient) 100% 50%;
   background-size: 20% 100%;
-  animation: dpb-loading 2s infinite linear;
 }
 
 .loading-indicator-small {
   width: 3rem;
   margin-top: 0.5rem;
   margin-bottom: 0.5rem;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .loading-indicator {
+    animation: dpb-loading 2s infinite linear;
+  }
 }
 
 @keyframes dpb-loading {

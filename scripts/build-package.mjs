@@ -32,6 +32,7 @@ try {
     "components/AppNavigation.vue",
     "components/OfflineBanner.vue",
     "composables/EventBus.ts",
+    "composables/theme.ts",
     "services/AuthService.ts",
     "services/AxiosAuthInterceptor.ts",
     "stores/AuthenticationStore.ts",
