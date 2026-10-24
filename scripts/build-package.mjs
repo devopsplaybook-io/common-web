@@ -23,25 +23,24 @@ try {
   );
   const [{ filename, files }] = JSON.parse(packOutput);
   const packageFiles = new Set(files.map(({ path }) => path));
-  const requiredFiles = [
+  // The public source directories are enumerated from disk so the required
+  // list can never drift from the exports map again.
+  const publicSourceDirectories = ["components", "composables", "services", "stores"];
+  const requiredFiles = new Set([
     "nuxt.config.ts",
     "assets/css/tokens.css",
     "assets/css/app-shell.css",
-    "components/Loading.vue",
-    "components/AlertMessages.vue",
-    "components/AppNavigation.vue",
-    "components/OfflineBanner.vue",
-    "composables/EventBus.ts",
-    "composables/theme.ts",
-    "services/AuthService.ts",
-    "services/AxiosAuthInterceptor.ts",
-    "stores/AuthenticationStore.ts",
     "README.md",
     "CHANGELOG.md",
     "CONTRIBUTING.md",
     "LICENSE",
-  ];
-  const missingFiles = requiredFiles.filter((path) => !packageFiles.has(path));
+  ]);
+  for (const directory of publicSourceDirectories) {
+    for (const entry of readdirSync(directory)) {
+      requiredFiles.add(`${directory}/${entry}`);
+    }
+  }
+  const missingFiles = [...requiredFiles].filter((path) => !packageFiles.has(path));
 
   if (missingFiles.length > 0) {
     throw new Error(`npm pack is missing required files: ${missingFiles.join(", ")}`);

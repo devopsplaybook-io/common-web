@@ -16,46 +16,7 @@ permissions:
 # `uses:` call once common-utils gates production dependencies only.
 # See CONTRIBUTING.md ("Dependency audit policy").
 jobs:
-  base-package:
-    runs-on: ubuntu-latest
-    outputs:
-      exists: ${{ steps.check.outputs.exists }}
-    steps:
-      - uses: actions/checkout@v7
-      - name: Check whether main has a package manifest
-        id: check
-        run: |
-          git fetch origin main --depth=1
-          if git cat-file -e origin/main:package.json 2>/dev/null; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
-
-  bootstrap-checks:
-    name: Bootstrap verification (initial package PR)
-    needs: base-package
-    if: needs.base-package.outputs.exists == 'false'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: "22"
-          cache: npm
-      - run: npm ci
-      - name: Audit production dependencies (blocking)
-        run: npm audit --omit=dev --audit-level=high
-      - name: Report development advisories (non-blocking)
-        continue-on-error: true
-        run: npm audit
-      - run: npm run lint
-      - run: npm test
-      - run: npm run build
-
   version-check:
-    needs: base-package
-    if: needs.base-package.outputs.exists == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

@@ -3,3 +3,10 @@ coverage/
 playground/.nuxt/
 playground/.output/
 playground/node_modules/
+
+# Environment files and secrets (never commit)
+.env
+.env.*
+!.env.example
+*.pem
+*.key

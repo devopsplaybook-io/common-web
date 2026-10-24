@@ -1,8 +1,18 @@
 {
   "name": "@devopsplaybook.io/common-web",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Shared Nuxt layer for DevOpsPlaybook web applications",
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/devopsplaybook-io/common-web.git"
+  },
+  "homepage": "https://github.com/devopsplaybook-io/common-web#readme",
+  "bugs": "https://github.com/devopsplaybook-io/common-web/issues",
+  "sideEffects": [
+    "**/*.css",
+    "**/*.vue"
+  ],
   "engines": {
     "node": ">=22"
   },
@@ -46,6 +56,7 @@
     "@vitejs/plugin-vue": "^6.0.9",
     "@vitest/coverage-v8": "^5.0.5",
     "@vue/test-utils": "^2.5.1",
+    "axe-core": "^4.14.0",
     "jsdom": "^30.1.1",
     "nuxt": "^4.6.2",
     "oxlint": "^1.85.0",

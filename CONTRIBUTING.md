@@ -15,6 +15,18 @@ npm audit --omit=dev --audit-level=high
 The tests consume the generated npm tarball, not only the working tree.
 `npm run build` checks the publish file list and builds the Nuxt playground.
 
+Two quality gates run with `npm test`:
+
+- **Coverage thresholds** are enforced in `vitest.config.ts` (statements 95%,
+  branches 88%, functions 99%, lines 97%) over the composables, services and
+  stores shipped in the tarball. Raise the bar when coverage improves; lower it
+  only with an explanation in the PR.
+- **Accessibility**: `tests/accessibility.spec.ts` runs axe-core against every
+  shipped component mounted in a real DOM tree and fails on violations. The
+  `color-contrast` rule is disabled there because jsdom cannot compute rendered
+  contrast; WCAG AA color pairs are already gated by `tests/contrast.spec.ts`
+  against the packed tokens.
+
 ## Scope and compatibility
 
 Keep the layer limited to UI and browser behavior that is shared by multiple
