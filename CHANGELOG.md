@@ -5,6 +5,23 @@ All notable changes to this project are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-10-24
+
+### Fixed
+
+- Treat corrupt or undecodable stored JWTs as signed out: clear every auth key,
+  emit `AUTH_UPDATED`, and return `null` instead of throwing.
+- Bound session renewal: 10 s request timeout, at most one retry after a 500 ms
+  backoff for network/5xx failures, and a 30 s per-token failure cooldown so a
+  failing refresh endpoint is not retried on every authenticated call.
+- Clear the session and emit `AUTH_UPDATED` when session renewal returns
+  401/403 (revoked session).
+- Validate renewed JWTs (decodable, non-empty, future `exp`, `exp > iat`) before
+  persisting them; keep the newer token when it changes during renewal.
+- Make `AuthService` storage access SSR-safe: no `localStorage` access outside
+  the browser; `getToken()` returns `null` and save/remove are no-ops.
+- Cover the failure paths of session renewal and token handling with tests.
+
 ## [0.4.0] - 2026-10-24
 
 ### Changed

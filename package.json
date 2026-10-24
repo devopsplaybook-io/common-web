@@ -1,6 +1,6 @@
 {
   "name": "@devopsplaybook.io/common-web",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Shared Nuxt layer for DevOpsPlaybook web applications",
   "license": "ISC",
   "engines": {
