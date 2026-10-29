@@ -5,6 +5,13 @@ All notable changes to this project are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-10-29
+
+### Changed
+
+- Dependency refresh: Axios 1.21.0, Pinia 4.1.0, Nuxt 4.6.3, oxlint 1.90.0,
+  `@vitejs/plugin-vue` 6.0.10 and jsdom 30.1.3. No public API change.
+
 ## [0.8.0] - 2026-10-24
 
 ### Added
