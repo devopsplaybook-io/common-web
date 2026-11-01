@@ -47,6 +47,8 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
+  --color-primary: #ff8a80;
+  --color-primary-hover: #ffb4ab;
   --color-text: #e0e0e0;
   --color-text-muted: #b0b0b0;
   --color-text-inverse: #fff;
@@ -69,6 +71,8 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
+    --color-primary: #ff8a80;
+    --color-primary-hover: #ffb4ab;
     --color-text: #e0e0e0;
     --color-text-muted: #b0b0b0;
     --color-text-inverse: #fff;
