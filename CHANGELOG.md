@@ -5,6 +5,44 @@ All notable changes to this project are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-11-01
+
+### Added
+
+- Optional CSP nonce for the pre-paint theme script: set
+  `COMMON_WEB_THEME_SCRIPT_NONCE` at build time, or build the head entry with
+  the new `themeInitScriptEntry(nonce)` helper and override `app.head.script`
+  in the consuming application for per-request nonces.
+- Cross-tab theme synchronisation through the `storage` event.
+
+### Changed
+
+- `useTheme()` state is a module-wide singleton: every call shares
+  `preference` and `isDark`, so independent instances stay in sync. The public
+  API is unchanged.
+- `useOfflineStatus()` starts from `true` and reads `navigator.onLine` after
+  mount, so a page loaded offline hydrates without a mismatch and shows the
+  banner immediately afterwards.
+- `PreferencesService` and `RefreshIntervalService` route storage through the
+  shared guarded helper and are now safe during SSR and with blocked storage.
+
+### Fixed
+
+- M3: `useTheme()` no longer throws when `localStorage` is missing or blocked
+  (sandboxed iframe, privacy mode); the theme still applies and persistence is
+  skipped.
+- M4: theme state is shared between `useTheme()` instances and across tabs.
+- M8: `OfflineBanner` no longer produces a hydration mismatch on an offline
+  page.
+- L1: `PreferencesService` and `RefreshIntervalService` fall back instead of
+  throwing without storage.
+- L9: the injected theme script accepts a CSP nonce.
+- L13: unmounting one `useAppHeight()` instance no longer cancels a pending
+  frame scheduled by another; the shared frame is cancelled with the last
+  instance.
+
+No dependency changed and no OpenTelemetry metric is added in this release.
+
 ## [0.10.0] - 2026-11-01
 
 ### Added
