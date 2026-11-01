@@ -1,5 +1,5 @@
 <template>
-  <div id="page-layout">
+  <div class="page-layout">
     <AppNavigation :links="links" :link-component="NuxtLink">
       <template #brand>
         <strong>Common Web Playground</strong>
@@ -7,7 +7,7 @@
     </AppNavigation>
     <main>
       <NuxtPage />
-      <AlertMessages id="page-alert-messages" />
+      <AlertMessages class="page-alert-messages" />
     </main>
     <OfflineBanner />
   </div>

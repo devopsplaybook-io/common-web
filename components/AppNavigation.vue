@@ -1,10 +1,10 @@
 <template>
-  <nav class="app-navigation" aria-label="Main navigation">
+  <nav class="app-navigation" :aria-label="label">
     <div class="app-navigation-brand">
       <slot name="brand" />
     </div>
     <ul class="app-navigation-links">
-      <li v-for="link in links" :key="link.to">
+      <li v-for="(link, index) in links" :key="`${link.to}::${index}`">
         <component
           :is="linkComponent"
           v-bind="linkProps(link)"
@@ -20,7 +20,7 @@
 </template>
 
 <script setup lang="ts">
-import type { Component } from "vue";
+import { watch, type Component } from "vue";
 
 interface AppNavigationLink {
   label: string;
@@ -33,8 +33,28 @@ const props = withDefaults(
   defineProps<{
     links: AppNavigationLink[];
     linkComponent?: string | Component;
+    label?: string;
   }>(),
-  { linkComponent: "a" },
+  { linkComponent: "a", label: "Main navigation" },
+);
+
+watch(
+  () => props.links,
+  (links) => {
+    if (typeof process !== "undefined" && process.env?.NODE_ENV === "production") {
+      return;
+    }
+    const seen = new Set<string>();
+    for (const link of links) {
+      if (seen.has(link.to)) {
+        console.warn(
+          `[AppNavigation] duplicate link target "${link.to}"; links are keyed by target and position.`,
+        );
+      }
+      seen.add(link.to);
+    }
+  },
+  { immediate: true, deep: true },
 );
 
 function linkProps(link: AppNavigationLink): { href: string } | { to: string } {

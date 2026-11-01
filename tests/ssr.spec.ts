@@ -44,6 +44,8 @@ describe("SSR rendering", () => {
 
     expect(html).toContain('role="status"');
     expect(html).toContain('aria-live="polite"');
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('aria-live="assertive"');
     expect(html).toContain("loading-indicator-small");
     expect(html).toContain('href="/"');
     expect(html).toContain('aria-current="page"');

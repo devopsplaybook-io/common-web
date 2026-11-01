@@ -88,6 +88,9 @@ describe("accessibility of the shipped components (axe)", () => {
     await nextTick();
     expect(wrapper.text()).toContain("info message");
     expect(wrapper.text()).toContain("error message");
+    expect(wrapper.find('[role="status"]').exists()).toBe(true);
+    expect(wrapper.find('[role="alert"]').exists()).toBe(true);
+    expect(wrapper.findAll('button[aria-label="Dismiss"]')).toHaveLength(2);
     await expectNoAxeViolations();
   });
 
@@ -121,6 +124,29 @@ describe("accessibility of the shipped components (axe)", () => {
       linkComponent: markRaw(LinkStub),
     });
     expect(wrapper.get("a.stub-link").attributes("aria-current")).toBe("page");
+    await expectNoAxeViolations();
+  });
+
+  it("keeps two navigations with distinct labels accessible", async () => {
+    const TwoNavs = defineComponent({
+      name: "TwoNavs",
+      render: () =>
+        h("div", [
+          h(AppNavigation, {
+            links: [{ label: "Home", to: "/", active: true }],
+            label: "Primary",
+          }),
+          h(AppNavigation, {
+            links: [{ label: "Docs", to: "/docs" }],
+            label: "Secondary",
+          }),
+        ]),
+    });
+    const wrapper = mountUnderMain(TwoNavs);
+    const labels = wrapper
+      .findAll("nav")
+      .map((nav) => nav.attributes("aria-label"));
+    expect(labels).toEqual(["Primary", "Secondary"]);
     await expectNoAxeViolations();
   });
 
