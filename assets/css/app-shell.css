@@ -1,9 +1,11 @@
+.page-layout,
 #page-layout {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-height: var(--app-height, 100dvh);
 }
 
+.page-alert-messages,
 #page-alert-messages {
   position: fixed;
   right: var(--space-xl, 2rem);

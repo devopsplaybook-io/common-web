@@ -26,16 +26,22 @@ required. The `playground/` directory demonstrates a consuming app.
 | Component | Purpose |
 | --- | --- |
 | `<Loading size="small" />` | Accessible loading indicator; `size` is `small` or `large`. The animation is disabled under `prefers-reduced-motion: reduce`. |
-| `<AlertMessages />` | Accessible live region displaying messages emitted on `EventBus`. |
-| `<AppNavigation :links="links" :link-component="NuxtLink" />` | Navigation shell with a named `brand` slot and configurable links (`label`, `to`, optional `icon` and `active`). |
+| `<AlertMessages />` | Accessible live regions displaying messages emitted on `EventBus`, each with a per-message **Dismiss** button. |
+| `<AppNavigation :links="links" :link-component="NuxtLink" label="Primary" />` | Navigation shell with a named `brand` slot, configurable links (`label`, `to`, optional `icon` and `active`) and an optional accessible `label`. |
 | `<OfflineBanner message="You are offline." />` | Announces offline status and accepts replacement content through its default slot. |
 
 `AlertMessages` listens for `EventTypes.ALERT_MESSAGE` events. Its payload is
 `{ text, type?, durationMs? }` with `type` limited to `info`, `success`,
 `warning` or `error`. The default display duration is five seconds;
-`durationMs: 0` keeps the message until it is dismissed from the queue.
-Identical `type` + `text` pairs are deduplicated and the queue keeps at most
-five messages, dropping the oldest first. Alert styles use the prefixed
+`durationMs: 0` keeps the message until the user activates its **Dismiss**
+button. Negative durations are clamped to `0`, so they stay until dismissed;
+non-finite values (`NaN`, `Infinity`) use the five-second default. Errors render
+in an assertive `role="alert"` region and the other severities in a polite
+`role="status"` region. The two regions are siblings and are always mounted, so
+each message is announced exactly once. The Dismiss control is a native
+`<button type="button">` with the accessible name `Dismiss` and a visible focus
+ring. Identical `type` + `text` pairs are deduplicated and the queue keeps at
+most five messages, dropping the oldest first. Alert styles use the prefixed
 `.alert-message*` classes, so consumer stylesheets are not affected by the
 layer's global styles. `handleError(error, { debug = false } = {})` logs a
 sanitized summary (message, status, method, path without query string, and
@@ -58,6 +64,18 @@ const NuxtLink = resolveComponent("NuxtLink");
   <AppNavigation :links="links" :link-component="NuxtLink" />
 </template>
 ```
+
+The `label` prop sets the navigation's accessible name and defaults to
+`Main navigation`. Give each navigation on a page a distinct label so screen
+reader users can tell them apart:
+
+```vue
+<AppNavigation :links="primaryLinks" label="Primary" />
+<AppNavigation :links="secondaryLinks" label="Secondary" />
+```
+
+Links are keyed by target and position, so duplicate `to` targets still render;
+in development the component logs a warning when it detects duplicates.
 
 `OfflineBanner` keeps its `role="status"` live region mounted at all times so
 screen readers announce the transition; while online the region is visually
@@ -271,8 +289,12 @@ Tokens include `--color-*` (including the per-status foreground tokens
 `--app-height`. Dark mode can be selected with `data-theme="dark"` or comes
 from `prefers-color-scheme` when no explicit light preference is set. Status
 colors meet WCAG AA against their `--color-on-*` foreground tokens in both
-themes. The `dpb-fade-in` and `dpb-blink` helper classes are disabled under
-`prefers-reduced-motion: reduce`.
+themes. `--color-primary` and `--color-primary-hover` are defined in both
+themes and meet AA (4.5:1) on the shipped `--color-surface` and
+`--color-surface-raised` backgrounds. `tests/contrast.spec.ts` gates text,
+muted text, primary, primary hover and the status color pairs in the light and
+both dark blocks. The `dpb-fade-in` and `dpb-blink` helper classes are disabled
+under `prefers-reduced-motion: reduce`.
 
 Load app-specific CSS after the layer and redefine only the values you need:
 
@@ -282,6 +304,25 @@ Load app-specific CSS after the layer and redefine only the values you need:
   --header-height: 4.5rem;
 }
 ```
+
+### App-shell hooks
+
+The app-shell stylesheet ships class hooks for the page frame and the
+floating alert container:
+
+```vue
+<div class="page-layout">
+  <AppNavigation :links="links" />
+  <main>
+    <NuxtPage />
+    <AlertMessages class="page-alert-messages" />
+  </main>
+</div>
+```
+
+`#page-layout` and `#page-alert-messages` remain supported as legacy aliases
+for existing consumers, so current markup keeps working. Prefer the classes in
+new markup to avoid duplicate-ID collisions when several layouts mount.
 
 ## Overriding a component
 

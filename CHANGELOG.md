@@ -5,6 +5,38 @@ All notable changes to this project are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-11-01
+
+### Added
+
+- Per-message **Dismiss** button on `AlertMessages`: a native, keyboard-operable
+  `type="button"` with the accessible name `Dismiss`, so sticky alerts can be
+  closed with the mouse or the keyboard.
+- Optional `label` prop on `AppNavigation` (default `Main navigation`), so two
+  navigations on one page are distinguishable to screen readers.
+- `.page-layout` and `.page-alert-messages` class hooks in the app shell.
+
+### Changed
+
+- Dark mode defines `--color-primary` (`#ff8a80`) and `--color-primary-hover`
+  (`#ffb4ab`), which meet WCAG AA on the shipped dark surfaces.
+- The contrast gate covers text, muted text, primary and primary hover on both
+  shipped surfaces in both themes, in addition to every status pair.
+- `AlertMessages` clamps negative `durationMs` values to `0` and uses the
+  five-second default for non-finite values.
+
+### Fixed
+
+- M5: sticky alerts are dismissible instead of being kept forever.
+- L3: dark-mode primary and hover text reach WCAG AA.
+- L5: navigation instances are distinguishable and duplicate link targets no
+  longer break rendering.
+- L6: error alerts are announced assertively in a sibling region and
+  `durationMs` is validated.
+- L7: app-shell hooks are documented classes, with the legacy IDs retained.
+
+No dependency changed and no OpenTelemetry metric is added in this release.
+
 ## [0.11.0] - 2026-11-01
 
 ### Added

@@ -5,6 +5,13 @@ import { describe, expect, it } from "vitest";
 const packedDirectory = process.env.COMMON_WEB_PACKED_DIR;
 const DEFAULT_ALERT_BACKGROUND = "#546e7a";
 const AA_MINIMUM = 4.5;
+const TEXT_TOKENS = [
+  "color-text",
+  "color-text-muted",
+  "color-primary",
+  "color-primary-hover",
+];
+const SURFACE_TOKENS = ["color-surface", "color-surface-raised"];
 
 interface TokenValues {
   [token: string]: string;
@@ -53,12 +60,32 @@ function tokens(block: string): TokenValues {
   return values;
 }
 
+function requireToken(theme: TokenValues, name: string, label: string): string {
+  const value = theme[name];
+  if (value === undefined) throw new Error(`${label} is missing --${name}`);
+  return value;
+}
+
 function expectAaCompliant(theme: TokenValues, label: string): void {
+  const surfaces = SURFACE_TOKENS.map((token) =>
+    requireToken(theme, token, label),
+  );
+  for (const token of TEXT_TOKENS) {
+    const foreground = requireToken(theme, token, label);
+    for (const background of surfaces) {
+      const ratio = contrastRatio(foreground, background);
+      expect(
+        ratio,
+        `${label} ${token} ${foreground} on ${background} is ${ratio.toFixed(2)}:1`,
+      ).toBeGreaterThanOrEqual(AA_MINIMUM);
+    }
+  }
+
   const pairs: Array<[string, string, string]> = [
-    ["success", theme["color-on-success"]!, theme["color-success"]!],
-    ["error", theme["color-on-error"]!, theme["color-error"]!],
-    ["warning", theme["color-on-warning"]!, theme["color-warning"]!],
-    ["default alert", theme["color-text-inverse"]!, DEFAULT_ALERT_BACKGROUND],
+    ["success", requireToken(theme, "color-on-success", label), requireToken(theme, "color-success", label)],
+    ["error", requireToken(theme, "color-on-error", label), requireToken(theme, "color-error", label)],
+    ["warning", requireToken(theme, "color-on-warning", label), requireToken(theme, "color-warning", label)],
+    ["default alert", requireToken(theme, "color-text-inverse", label), DEFAULT_ALERT_BACKGROUND],
   ];
   for (const [name, foreground, background] of pairs) {
     const ratio = contrastRatio(foreground, background);
@@ -69,7 +96,7 @@ function expectAaCompliant(theme: TokenValues, label: string): void {
   }
 }
 
-describe("status color contrast (WCAG AA)", () => {
+describe("text and status color contrast (WCAG AA)", () => {
   it("runs against the packed tokens.css", () => {
     expect(
       packedDirectory,
@@ -77,7 +104,7 @@ describe("status color contrast (WCAG AA)", () => {
     ).toBeDefined();
   });
 
-  it("meets AA contrast for status text in light mode", () => {
+  it("meets AA contrast for text, muted, primary, hover and status colors in light mode", () => {
     const css = readFileSync(
       resolve(packedDirectory!, "assets/css/tokens.css"),
       "utf8",
@@ -85,7 +112,7 @@ describe("status color contrast (WCAG AA)", () => {
     expectAaCompliant(tokens(declarationBlock(":root {", css)), "light");
   });
 
-  it("meets AA contrast for status text in dark mode", () => {
+  it("meets AA contrast for text, muted, primary, hover and status colors in dark mode", () => {
     const css = readFileSync(
       resolve(packedDirectory!, "assets/css/tokens.css"),
       "utf8",
@@ -100,6 +127,25 @@ describe("status color contrast (WCAG AA)", () => {
     );
   });
 
+  it("defines the primary and hover tokens in both dark blocks", () => {
+    const css = readFileSync(
+      resolve(packedDirectory!, "assets/css/tokens.css"),
+      "utf8",
+    );
+    const explicit = tokens(declarationBlock(':root[data-theme="dark"] {', css));
+    const media = tokens(
+      declarationBlock(':root:not([data-theme="light"]) {', css),
+    );
+
+    for (const token of ["color-primary", "color-primary-hover"]) {
+      expect(explicit[token], `dark is missing --${token}`).toBeDefined();
+      expect(
+        media[token],
+        `dark (prefers-color-scheme) is missing --${token}`,
+      ).toBeDefined();
+    }
+  });
+
   it("keeps both dark blocks consistent", () => {
     const css = readFileSync(
       resolve(packedDirectory!, "assets/css/tokens.css"),
@@ -110,16 +156,11 @@ describe("status color contrast (WCAG AA)", () => {
       declarationBlock(':root:not([data-theme="light"]) {', css),
     );
 
-    for (const token of [
-      "color-error",
-      "color-on-success",
-      "color-on-error",
-      "color-on-warning",
-    ]) {
+    for (const [token, value] of Object.entries(explicit)) {
       expect(
         media[token],
         `--${token} must match between the two dark blocks`,
-      ).toBe(explicit[token]);
+      ).toBe(value);
     }
   });
 });
