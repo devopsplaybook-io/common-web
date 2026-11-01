@@ -18,7 +18,7 @@ const installedPackage = join(scopeDirectory, "common-web");
 try {
   const packOutput = execFileSync(
     "npm",
-    ["pack", "--json", "--pack-destination", temporaryDirectory],
+    ["pack", "--json", "--ignore-scripts", "--pack-destination", temporaryDirectory],
     { encoding: "utf8" },
   );
   const [{ filename, files }] = JSON.parse(packOutput);

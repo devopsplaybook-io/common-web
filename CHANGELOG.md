@@ -22,6 +22,9 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and its accepted advisories are documented in `CONTRIBUTING.md`.
 - Packaging metadata: `vue` is now an explicit peer dependency and `pinia` is
   optional through `peerDependenciesMeta` (still a devDependency for tests).
+- A `prepare` script runs `nuxi prepare` on install so the generated Nuxt
+  tsconfig that the root `tsconfig.json` extends exists before the test and
+  build steps; the pack calls skip lifecycle scripts.
 - The type-check gate required mechanical type annotations in
   `tests/contrast.spec.ts`; no runtime behaviour or public API changed.
 

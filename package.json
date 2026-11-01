@@ -39,6 +39,7 @@
   ],
   "scripts": {
     "dev": "nuxi dev playground",
+    "prepare": "nuxi prepare",
     "lint": "oxlint components composables services stores tests scripts playground vitest.config.ts nuxt.config.ts",
     "typecheck": "nuxi typecheck",
     "test": "node scripts/test-packed.mjs",
