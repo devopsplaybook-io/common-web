@@ -61,6 +61,38 @@ function fireMediaChange(media: FakeMediaQuery, matches: boolean): void {
   for (const listener of media.listeners) listener({ matches });
 }
 
+function throwingStorage(): Storage {
+  const blocked = (): never => {
+    throw new DOMException("Storage blocked", "SecurityError");
+  };
+  return {
+    getItem: blocked,
+    setItem: blocked,
+    removeItem: blocked,
+    clear: blocked,
+    key: blocked,
+    length: 0,
+  } as unknown as Storage;
+}
+
+function blockStorageAccess(): () => void {
+  const descriptor = Object.getOwnPropertyDescriptor(window, "localStorage");
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    get() {
+      throw new DOMException("Storage blocked", "SecurityError");
+    },
+  });
+  return () => {
+    if (descriptor) Object.defineProperty(window, "localStorage", descriptor);
+    else Reflect.deleteProperty(window, "localStorage");
+  };
+}
+
+function height(): string {
+  return document.documentElement.style.getPropertyValue("--app-height");
+}
+
 function mountComposable<Returned>(setup: () => Returned): {
   result: Returned;
   wrapper: { unmount: () => void };
@@ -110,6 +142,108 @@ describe("composables and event utilities", () => {
         document.documentElement.style.getPropertyValue("--app-height"),
       ).toBe("720px");
     });
+    wrapper.unmount();
+  });
+
+  it("shares one scheduled frame between app-height instances", async () => {
+    const callbacks: FrameRequestCallback[] = [];
+    let nextFrame = 0;
+    vi.stubGlobal(
+      "requestAnimationFrame",
+      vi.fn((callback: FrameRequestCallback) => {
+        callbacks.push(callback);
+        nextFrame += 1;
+        return nextFrame;
+      }),
+    );
+    const cancel = vi.fn();
+    vi.stubGlobal("cancelAnimationFrame", cancel);
+
+    const first = mount(
+      defineComponent({
+        setup() {
+          useAppHeight();
+          return () => h("div");
+        },
+      }),
+    );
+    const second = mount(
+      defineComponent({
+        setup() {
+          useAppHeight();
+          return () => h("div");
+        },
+      }),
+    );
+    await nextTick();
+
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 700,
+    });
+    window.dispatchEvent(new Event("resize"));
+    window.dispatchEvent(new Event("resize"));
+    expect(callbacks).toHaveLength(1);
+
+    first.unmount();
+    expect(cancel).not.toHaveBeenCalled();
+
+    callbacks[0]?.(0);
+    expect(height()).toBe("700px");
+
+    second.unmount();
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
+  it("cancels a pending app-height frame only when the last instance unmounts", async () => {
+    let nextFrame = 0;
+    vi.stubGlobal(
+      "requestAnimationFrame",
+      vi.fn(() => {
+        nextFrame += 1;
+        return nextFrame;
+      }),
+    );
+    const cancel = vi.fn();
+    vi.stubGlobal("cancelAnimationFrame", cancel);
+
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          useAppHeight();
+          return () => h("div");
+        },
+      }),
+    );
+    await nextTick();
+
+    window.dispatchEvent(new Event("resize"));
+    expect(nextFrame).toBe(1);
+
+    wrapper.unmount();
+    expect(cancel).toHaveBeenCalledWith(1);
+  });
+
+  it("updates the app height immediately without requestAnimationFrame", async () => {
+    vi.stubGlobal("requestAnimationFrame", undefined);
+
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          useAppHeight();
+          return () => h("div");
+        },
+      }),
+    );
+    await nextTick();
+
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 640,
+    });
+    window.dispatchEvent(new Event("resize"));
+
+    expect(height()).toBe("640px");
     wrapper.unmount();
   });
 
@@ -191,6 +325,116 @@ describe("composables and event utilities", () => {
     expect(theme.isDark.value).toBe(true);
     expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
     wrapper.unmount();
+    expect(media.listeners).toHaveLength(0);
+  });
+
+  it("applies the theme when localStorage is undefined", async () => {
+    vi.stubGlobal("localStorage", undefined);
+    stubMatchMedia(false);
+    const { result: theme, wrapper } = mountComposable(() => useTheme());
+    await nextTick();
+
+    expect(() => theme.setTheme("dark")).not.toThrow();
+    expect(theme.preference.value).toBe("dark");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+
+    expect(() => theme.setTheme("system")).not.toThrow();
+    expect(theme.preference.value).toBe("system");
+    wrapper.unmount();
+  });
+
+  it("applies the theme when storage access throws", async () => {
+    const restore = blockStorageAccess();
+    stubMatchMedia(true);
+    try {
+      const { result: theme, wrapper } = mountComposable(() => useTheme());
+      await nextTick();
+
+      expect(theme.isDark.value).toBe(true);
+      expect(() => theme.setTheme("light")).not.toThrow();
+      expect(theme.isDark.value).toBe(false);
+      expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+      wrapper.unmount();
+    } finally {
+      restore();
+    }
+  });
+
+  it("applies the theme when storage methods throw", async () => {
+    vi.stubGlobal("localStorage", throwingStorage());
+    stubMatchMedia(false);
+    const { result: theme, wrapper } = mountComposable(() => useTheme());
+    await nextTick();
+
+    expect(() => theme.setTheme("dark")).not.toThrow();
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+    expect(() => theme.setTheme("system")).not.toThrow();
+    wrapper.unmount();
+  });
+
+  it("shares theme state between independent instances", async () => {
+    stubMatchMedia(false);
+    const first = mountComposable(() => useTheme());
+    const second = mountComposable(() => useTheme());
+    await nextTick();
+
+    first.result.setTheme("dark");
+    expect(second.result.preference.value).toBe("dark");
+    expect(second.result.isDark.value).toBe(true);
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+    expect(localStorage.getItem(THEME_KEY)).toBe("dark");
+
+    second.result.setTheme("light");
+    expect(first.result.preference.value).toBe("light");
+    expect(first.result.isDark.value).toBe(false);
+    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+
+    first.wrapper.unmount();
+    second.wrapper.unmount();
+  });
+
+  it("follows theme changes made in another tab", async () => {
+    const media = stubMatchMedia(false);
+    const { result: theme, wrapper } = mountComposable(() => useTheme());
+    await nextTick();
+
+    localStorage.setItem(THEME_KEY, "dark");
+    window.dispatchEvent(
+      new StorageEvent("storage", { key: THEME_KEY, newValue: "dark" }),
+    );
+    expect(theme.preference.value).toBe("dark");
+    expect(theme.isDark.value).toBe(true);
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+
+    window.dispatchEvent(
+      new StorageEvent("storage", { key: "UNRELATED", newValue: "x" }),
+    );
+    expect(theme.preference.value).toBe("dark");
+
+    localStorage.removeItem(THEME_KEY);
+    window.dispatchEvent(new StorageEvent("storage", { key: null }));
+    expect(theme.preference.value).toBe("system");
+    expect(theme.isDark.value).toBe(false);
+    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+
+    wrapper.unmount();
+    expect(media.listeners).toHaveLength(0);
+  });
+
+  it("shares one media listener per mount session", async () => {
+    const media = stubMatchMedia(false);
+    const first = mountComposable(() => useTheme());
+    await nextTick();
+    expect(media.listeners).toHaveLength(1);
+
+    const second = mountComposable(() => useTheme());
+    await nextTick();
+    expect(media.listeners).toHaveLength(1);
+
+    first.wrapper.unmount();
+    expect(media.listeners).toHaveLength(1);
+
+    second.wrapper.unmount();
     expect(media.listeners).toHaveLength(0);
   });
 

@@ -457,6 +457,100 @@ describe("RefreshIntervalService", () => {
   });
 });
 
+describe("SSR-safe storage access", () => {
+  function throwingStorage(): Storage {
+    const blocked = (): never => {
+      throw new DOMException("Storage blocked", "SecurityError");
+    };
+    return {
+      getItem: blocked,
+      setItem: blocked,
+      removeItem: blocked,
+      clear: blocked,
+      key: blocked,
+      length: 0,
+    } as unknown as Storage;
+  }
+
+  function blockStorageAccess(): () => void {
+    const descriptor = Object.getOwnPropertyDescriptor(window, "localStorage");
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      get() {
+        throw new DOMException("Storage blocked", "SecurityError");
+      },
+    });
+    return () => {
+      if (descriptor) Object.defineProperty(window, "localStorage", descriptor);
+      else Reflect.deleteProperty(window, "localStorage");
+    };
+  }
+
+  it("treats preferences as empty when localStorage is undefined", () => {
+    vi.stubGlobal("localStorage", undefined);
+
+    expect(PreferencesService.get("density")).toBeNull();
+    expect(() => PreferencesService.set("density", "compact")).not.toThrow();
+    expect(() => PreferencesService.remove("density")).not.toThrow();
+  });
+
+  it("treats preferences as empty when storage methods throw", () => {
+    vi.stubGlobal("localStorage", throwingStorage());
+
+    expect(PreferencesService.get("density")).toBeNull();
+    expect(() => PreferencesService.set("density", "compact")).not.toThrow();
+    expect(() => PreferencesService.remove("density")).not.toThrow();
+  });
+
+  it("treats preferences as empty when storage access throws", () => {
+    const restore = blockStorageAccess();
+    try {
+      expect(PreferencesService.get("density")).toBeNull();
+      expect(() => PreferencesService.set("density", "compact")).not.toThrow();
+      expect(() => PreferencesService.remove("density")).not.toThrow();
+    } finally {
+      restore();
+    }
+  });
+
+  it("falls back to the default refresh interval when localStorage is undefined", () => {
+    vi.stubGlobal("localStorage", undefined);
+
+    expect(RefreshIntervalService.get()).toBe(RefreshIntervalService.DEFAULT);
+    expect(() => RefreshIntervalService.set("5000")).not.toThrow();
+    expect(() => RefreshIntervalService.set("abc")).toThrow(TypeError);
+  });
+
+  it("falls back to the default refresh interval when storage methods throw", () => {
+    vi.stubGlobal("localStorage", throwingStorage());
+
+    expect(RefreshIntervalService.get()).toBe(RefreshIntervalService.DEFAULT);
+    expect(() => RefreshIntervalService.set("5000")).not.toThrow();
+    expect(() => RefreshIntervalService.set("1.5")).toThrow(TypeError);
+  });
+
+  it("falls back to the default refresh interval when storage access throws", () => {
+    const restore = blockStorageAccess();
+    try {
+      expect(RefreshIntervalService.get()).toBe(
+        RefreshIntervalService.DEFAULT,
+      );
+      expect(() => RefreshIntervalService.set("5000")).not.toThrow();
+    } finally {
+      restore();
+    }
+  });
+
+  it("rejects unsafe-integer values even when they are digits", () => {
+    localStorage.setItem(RefreshIntervalService.KEY, "99999999999999999999");
+    expect(RefreshIntervalService.get()).toBe(RefreshIntervalService.DEFAULT);
+
+    expect(() =>
+      RefreshIntervalService.set("99999999999999999999"),
+    ).toThrow(TypeError);
+  });
+});
+
 describe("AuthService session hardening", () => {
   it("treats a corrupt stored token as signed out", async () => {
     localStorage.setItem("auth_token", "not-a-jwt");
