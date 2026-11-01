@@ -61,32 +61,51 @@ const NuxtLink = resolveComponent("NuxtLink");
 
 `OfflineBanner` keeps its `role="status"` live region mounted at all times so
 screen readers announce the transition; while online the region is visually
-hidden. The default copy is the neutral `You are offline.`; replace it with
-the `message` prop or the default slot.
+hidden. The banner renders hidden in server HTML and reflects the real
+connectivity right after hydration. The default copy is the neutral
+`You are offline.`; replace it with the `message` prop or the default slot.
 
 ## Composables and services
 
 - `useTheme()` persists `light`/`dark` preferences in `localStorage` and applies
-  `data-theme` to the document root. `isDark` reflects the effective theme: the
-  default `system` preference follows `prefers-color-scheme`, including live
-  operating-system changes, and `toggleTheme()` toggles from that effective
-  value. Use `setTheme("system")` to return to the operating-system preference.
+  `data-theme` to the document root. State is a module-wide singleton: every
+  `useTheme()` call shares the same `preference` and `isDark` refs, so a second
+  call never sees a stale copy. A window `storage` listener keeps tabs in sync.
+  `isDark` reflects the effective theme: the default `system` preference
+  follows `prefers-color-scheme`, including live operating-system changes, and
+  `toggleTheme()` toggles from that effective value. Use `setTheme("system")`
+  to return to the operating-system preference. When `localStorage` is missing
+  (SSR) or blocked (sandboxed iframe, privacy mode), the theme still applies
+  and only persistence is skipped.
   The layer also injects a small pre-paint `<head>` script that applies
   `data-theme` from `localStorage` and `prefers-color-scheme` before first
   paint, so a stored dark preference no longer flashes the light theme during
   load. Applications with a strict CSP must allow this inline script (nonce or
   `unsafe-inline`); without it, the `prefers-color-scheme` CSS path still
   applies and the theme resolves after hydration.
+  Set the `COMMON_WEB_THEME_SCRIPT_NONCE` environment variable at build time to
+  add a nonce to the injected tag (it is read when `nuxt.config.ts` is
+  evaluated). Per-request nonces are not supported by the shared layer: build
+  the head entry with the exported
+  `themeInitScriptEntry(nonce)` helper from
+  `@devopsplaybook.io/common-web/composables/theme` and override
+  `app.head.script` in the consuming application.
 - `useAppHeight()` updates `--app-height` from `visualViewport` when available
   and cleans up resize listeners on unmount. Resize updates are coalesced with
   `requestAnimationFrame`, so repeated resize events and multiple component
-  instances write the custom property at most once per frame.
-- `useOfflineStatus()` returns a reactive `isOnline` ref, initialised from
-  `navigator.onLine` so a page loaded offline renders offline immediately.
-- Services are browser-only and available through package deep imports, for
-  example `@devopsplaybook.io/common-web/services/AuthService`. `AuthService`
-  guards every `localStorage` access, so during SSR `getToken()` resolves
-  `null` and `saveToken()` / `removeToken()` are no-ops.
+  instances write the custom property at most once per frame. The pending frame
+  is shared across instances and cancelled only when the last instance unmounts,
+  so unmounting one component never cancels another one's update.
+- `useOfflineStatus()` returns a reactive `isOnline` ref. It starts as `true`
+  so server HTML and the first client render agree, then reads
+  `navigator.onLine` after mount and follows the `online`/`offline` events, so a
+  page loaded offline shows the offline banner right after hydration without a
+  hydration mismatch.
+- Services are available through package deep imports, for example
+  `@devopsplaybook.io/common-web/services/AuthService`. `AuthService`,
+  `PreferencesService` and `RefreshIntervalService` guard every `localStorage`
+  access through an internal `BrowserStorage` helper, so during SSR or with
+  blocked storage reads return their documented fallback and writes are no-ops.
 - `createAuthenticationStore()` returns the Pinia store definition; `Pinia`
   must be available in the consuming app.
 
@@ -210,29 +229,33 @@ or response body.
 `RefreshIntervalService.get()` falls back to `"10000"` when the stored value is
 missing or malformed; `set()` normalises valid non-negative integer strings
 (for example `"05000"` becomes `"5000"`) and throws `TypeError` otherwise.
-`"0"` is valid and keeps polling disabled.
+`"0"` is valid and keeps polling disabled. Both `PreferencesService` and
+`RefreshIntervalService` tolerate missing or blocked storage: reads return
+`null` / `"10000"` and writes are skipped, so they are safe during SSR; an
+invalid `set()` value still throws `TypeError`.
 
 ## SSR and client-only usage
 
 The layer is SSR-compatible: the components render on the server, and the
 composables guard their browser-only access.
 
-- `useTheme()` guards `document` and `localStorage` (`applyTheme()` returns
-  early when `document` is missing; storage writes are skipped), and reads the
-  stored preference and media query in `onMounted`, which never runs during SSR.
-- `useOfflineStatus()` defaults `isOnline` to `true` when `navigator` is
-  missing, and registers its listeners in `onMounted`.
+- `useTheme()` keeps module-level state, but touches `document`, `window` and
+  `localStorage` only in `onMounted` (which never runs during SSR) and through
+  the guarded `BrowserStorage` helper; the server always renders the default
+  `system` preference.
+- `useOfflineStatus()` initialises `isOnline` to `true`, so the server and the
+  first client render agree; the real value is read in `onMounted`, so an
+  offline page shows the banner right after hydration instead of in server
+  HTML.
 - `useAppHeight()` touches `window` only inside `onMounted`.
-- `AuthService` guards every `localStorage` access: during SSR `getToken()`
-  resolves `null` and `saveToken()` / `removeToken()` are no-ops.
+- `AuthService`, `PreferencesService` and `RefreshIntervalService` guard every
+  `localStorage` access: during SSR reads return their documented fallback and
+  writes are no-ops.
 
 Token storage, session renewal, `AUTH_UPDATED` propagation, cross-tab
 synchronisation and the opt-in Axios integration are browser-only: register the
 Axios helper from a `.client.ts` plugin as shown above, and expect the
 authentication state to become meaningful only after hydration.
-`PreferencesService` and `RefreshIntervalService` access `localStorage`
-unguarded and must only be called in the browser (a client plugin or a
-composable hook, never during SSR).
 
 `tests/ssr.spec.ts` renders the shipped components with `createSSRApp` and
 `renderToString` in a Node environment, so this server-rendering contract is

@@ -1,6 +1,7 @@
 import { onMounted, onUnmounted } from "vue";
 
 let frame: number | null = null;
+let mountedConsumers = 0;
 
 export function useAppHeight(): void {
   function updateAppHeight(): void {
@@ -21,6 +22,7 @@ export function useAppHeight(): void {
   }
 
   onMounted(() => {
+    mountedConsumers += 1;
     updateAppHeight();
     window.addEventListener("resize", scheduleAppHeight);
     window.visualViewport?.addEventListener("resize", scheduleAppHeight);
@@ -29,8 +31,12 @@ export function useAppHeight(): void {
   onUnmounted(() => {
     window.removeEventListener("resize", scheduleAppHeight);
     window.visualViewport?.removeEventListener("resize", scheduleAppHeight);
-    if (frame !== null) {
-      cancelAnimationFrame(frame);
+    mountedConsumers = Math.max(0, mountedConsumers - 1);
+    // Another instance may still use the shared pending frame.
+    if (mountedConsumers === 0 && frame !== null) {
+      if (typeof cancelAnimationFrame === "function") {
+        cancelAnimationFrame(frame);
+      }
       frame = null;
     }
   });
