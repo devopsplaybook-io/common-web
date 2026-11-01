@@ -5,6 +5,55 @@ All notable changes to this project are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-11-01
+
+### Added
+
+- `registerAxiosAuthInterceptors(instance, { allowedOrigins, loginPaths })`:
+  `allowedOrigins` lists extra origins that may receive the bearer token, and
+  `loginPaths` replaces the default `/users/session` login-path exemption.
+- `AUTH_RENEWAL_FAILED` event with `{ reason }` (`timeout`, `5xx`, `network` or
+  `invalid-response`), carrying no token or PII. No OpenTelemetry metric or
+  dependency is added.
+- `UserService.isInitialized({ timeoutMs, signal, cacheTtlMs })`: a 5 s default
+  timeout, an optional `AbortSignal`, an opt-in short-lived cache for a
+  successful result and a logged failure reason.
+- `handleError(error, { debug })`: `debug: true` logs the raw error object; the
+  default logs a sanitized summary with redacted credentials.
+- `removeToken(token)` compare-and-remove semantics.
+
+### Changed
+
+- Bearer-token attachment is origin-scoped: relative URLs, the page origin, the
+  origin of an absolute `SERVER_URL` and configured `allowedOrigins` receive
+  the token; every other origin receives none and cannot trigger renewal.
+- A `401` clears the session only when the failed request used the currently
+  stored token; a stale `401` is ignored.
+- Session renewal runs in the background: `getToken()` and `getAuthHeader()`
+  return the still-valid token immediately while renewal continues. The
+  renewal timeout drops from 10 s to 3 s; one 500 ms retry and the 30 s cooldown
+  are unchanged.
+- `Config.set()` trims whitespace and strips trailing slashes and warns in
+  development about insecure non-loopback `http:` URLs.
+- `removeToken()`'s optional argument is no longer ignored, and
+  `AuthenticationStore` unsubscribes its `AUTH_UPDATED` listener when disposed.
+
+### Fixed
+
+- H1: bearer tokens are no longer attached to requests to third-party origins.
+- M1: a stale `401` no longer clears a newer session.
+- M2: error logging no longer includes the bearer token.
+- M6: `UserService.isInitialized()` no longer stalls on a hung backend and
+  reports the failure reason.
+- M10: session renewal no longer blocks the triggering request.
+- L2: an expired token is never returned after a slow renewal failure.
+- L4: the authentication store no longer leaks an event listener per instance.
+- L10: `SERVER_URL` trailing-slash and insecure-HTTP handling is enforced.
+- L11: login-path detection is configurable.
+- L14: tokens with malformed `exp`/`iat` claims are treated as corrupt.
+
+No dependency changed in this release.
+
 ## [0.9.0] - 2026-11-01
 
 ### Added
