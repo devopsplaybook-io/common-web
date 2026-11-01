@@ -1,5 +1,6 @@
 import { defineComponent, h, nextTick } from "vue";
 import { flushPromises, mount } from "@vue/test-utils";
+import { AxiosHeaders } from "axios";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EventBus, EventTypes, handleError } from "@devopsplaybook.io/common-web/composables/EventBus";
@@ -231,6 +232,105 @@ describe("composables and event utilities", () => {
 
     EventBus.off(EventTypes.ALERT_MESSAGE, onAlert);
     log.mockRestore();
+  });
+
+  it("logs a sanitized error summary without the bearer token", () => {
+    const token = validToken();
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const error = {
+      message: "Request failed with status code 401",
+      config: {
+        method: "get",
+        url: "/api/secret?token=leaked",
+        headers: new AxiosHeaders({
+          Authorization: `Bearer ${token}`,
+          "X-Request-Id": "req-1",
+        }),
+      },
+      response: { status: 401 },
+    };
+
+    try {
+      handleError(error);
+
+      const summary = log.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(summary).toMatchObject({
+        message: "Request failed with status code 401",
+        status: 401,
+        method: "get",
+        path: "/api/secret",
+      });
+
+      const headers = summary.headers as Record<string, string>;
+      const headerKey = Object.keys(headers).find(
+        (name) => name.toLowerCase() === "authorization",
+      );
+      expect(headerKey).toBeDefined();
+      expect(headers[headerKey as string]).toBe("[redacted]");
+      expect(headers["X-Request-Id"]).toBe("req-1");
+
+      const serialized = JSON.stringify(summary);
+      expect(serialized).not.toContain(token);
+      expect(serialized).not.toContain("leaked");
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it("redacts raw header objects and JWT-shaped messages", () => {
+    const token = validToken();
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      handleError({
+        message: `token ${token} leaked`,
+        config: {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        },
+      });
+
+      const summary = log.mock.calls[0]?.[0] as Record<string, unknown>;
+      const serialized = JSON.stringify(summary);
+      expect(serialized).not.toContain(token);
+      expect(serialized).not.toContain("Bearer ");
+      expect(summary.headers).toEqual({
+        Authorization: "[redacted]",
+        Accept: "application/json",
+      });
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it("logs the raw error only in debug mode", () => {
+    const token = validToken();
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const error = { config: { headers: { Authorization: `Bearer ${token}` } } };
+
+    try {
+      handleError(error, { debug: true });
+      expect(log).toHaveBeenCalledWith(error);
+
+      log.mockClear();
+      handleError(error);
+      expect(log).not.toHaveBeenCalledWith(error);
+      expect(JSON.stringify(log.mock.calls[0]?.[0])).not.toContain(token);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it("removes its AUTH_UPDATED listener when the store is disposed", () => {
+    setActivePinia(createPinia());
+    const listenerCount = () =>
+      EventBus.all.get(EventTypes.AUTH_UPDATED)?.length ?? 0;
+    const before = listenerCount();
+
+    const authentication = AuthenticationStore();
+    expect(listenerCount()).toBe(before + 1);
+
+    authentication.$dispose();
+    expect(listenerCount()).toBe(before);
   });
 
   it("creates the Pinia authentication store", async () => {
