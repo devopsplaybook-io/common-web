@@ -1,11 +1,12 @@
 import { onMounted, onUnmounted, ref } from "vue";
 
 export function useOfflineStatus() {
-  const isOnline = ref(
-    typeof navigator === "undefined" ? true : navigator.onLine,
-  );
+  // Always start online so server HTML and the first client render agree;
+  // the real value is read after mount to avoid a hydration mismatch.
+  const isOnline = ref(true);
 
   function updateStatus(): void {
+    if (typeof navigator === "undefined") return;
     isOnline.value = navigator.onLine;
   }
 
