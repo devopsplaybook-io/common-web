@@ -1,13 +1,17 @@
 import axios from "axios";
 import { jwtDecode } from "jwt-decode";
-import { EventBus, EventTypes } from "../composables/EventBus";
+import {
+  EventBus,
+  EventTypes,
+  type AuthRenewalFailureReason,
+} from "../composables/EventBus";
 import Config from "./Config";
 import { Timeout } from "./Timeout";
 
 export const AUTH_TOKEN_KEY = "auth_token";
 const LEGACY_TOKEN_KEYS = ["AUTH_TOKEN", "AUTH_TOKEN_KEY"] as const;
 
-const RENEWAL_TIMEOUT_MS = 10_000;
+const RENEWAL_TIMEOUT_MS = 3_000;
 const RENEWAL_RETRY_DELAY_MS = 500;
 const RENEWAL_FAILURE_COOLDOWN_MS = 30_000;
 const RENEWAL_MAX_ATTEMPTS = 2;
@@ -25,12 +29,19 @@ export interface AuthHeaders {
 
 class SessionRenewalError extends Error {
   retryable: boolean;
+  reason: AuthRenewalFailureReason;
   status?: number;
 
-  constructor(message: string, retryable: boolean, status?: number) {
+  constructor(
+    message: string,
+    retryable: boolean,
+    reason: AuthRenewalFailureReason,
+    status?: number,
+  ) {
     super(message);
     this.name = "SessionRenewalError";
     this.retryable = retryable;
+    this.reason = reason;
     this.status = status;
   }
 }
@@ -56,12 +67,17 @@ export class AuthService {
   }
 
   /**
-   * Clears every stored token and emits `AUTH_UPDATED`. The optional argument
-   * is accepted for API compatibility with older callers and is ignored.
+   * Clears every stored token and emits `AUTH_UPDATED` once.
+   *
+   * Without an argument every auth key is removed. With a token, this is a
+   * compare-and-remove operation: the session is cleared only when the stored
+   * token still equals the argument, so a stale response cannot discard a
+   * newer session.
    */
-  static async removeToken(_token?: string): Promise<void> {
+  static async removeToken(token?: string): Promise<void> {
     const storage = AuthService.storage();
     if (!storage) return;
+    if (token !== undefined && AuthService.readToken() !== token) return;
     const keys = [AUTH_TOKEN_KEY, ...LEGACY_TOKEN_KEYS];
     const present = keys.filter((key) => storage.getItem(key) !== null);
     if (present.length === 0) return;
@@ -91,7 +107,11 @@ export class AuthService {
       decoded.exp > decoded.iat &&
       decoded.exp - now <= (decoded.exp - decoded.iat) * 0.2
     ) {
-      return AuthService.renewToken(token);
+      // Renew in the background: the caller keeps using the still-valid token
+      // and a later call picks up the renewed value. Expected failures are
+      // handled inside renewal, so this promise never rejects.
+      void AuthService.renewToken(token);
+      return token;
     }
 
     return token;
@@ -130,16 +150,38 @@ export class AuthService {
 
   private static tryDecode(token: string): AuthTokenClaims | null {
     try {
-      const decoded = jwtDecode<AuthTokenClaims>(token);
-      if (typeof decoded !== "object" || decoded === null) return null;
-      return decoded;
+      const decoded = jwtDecode<unknown>(token);
+      if (
+        typeof decoded !== "object" ||
+        decoded === null ||
+        Array.isArray(decoded)
+      ) {
+        return null;
+      }
+      const claims = decoded as Record<string, unknown>;
+      if (
+        "exp" in claims &&
+        (typeof claims.exp !== "number" || !Number.isFinite(claims.exp))
+      ) {
+        return null;
+      }
+      if (
+        "iat" in claims &&
+        (typeof claims.iat !== "number" || !Number.isFinite(claims.iat))
+      ) {
+        return null;
+      }
+      return {
+        exp: claims.exp as number | undefined,
+        iat: claims.iat as number | undefined,
+      };
     } catch {
       return null;
     }
   }
 
-  private static async clearSession(): Promise<void> {
-    await AuthService.removeToken();
+  private static async clearSession(token?: string): Promise<void> {
+    await AuthService.removeToken(token);
   }
 
   private static emitAuthUpdated(): void {
@@ -174,10 +216,9 @@ export class AuthService {
   private static async requestTokenRenewal(
     token: string,
   ): Promise<string | null> {
-    const config = await Config.get();
-
     for (let attempt = 1; attempt <= RENEWAL_MAX_ATTEMPTS; attempt += 1) {
       try {
+        const config = await Config.get();
         const renewedToken = await AuthService.requestRenewedToken(
           config.SERVER_URL,
           token,
@@ -194,19 +235,19 @@ export class AuthService {
         if (renewalError.status === 401 || renewalError.status === 403) {
           const storedToken = AuthService.readToken();
           if (storedToken !== token) return storedToken;
-          await AuthService.clearSession();
+          await AuthService.clearSession(token);
           return null;
         }
 
         if (!renewalError.retryable || attempt === RENEWAL_MAX_ATTEMPTS) {
-          return AuthService.handleRenewalFailure(token);
+          return AuthService.handleRenewalFailure(token, renewalError.reason);
         }
 
         await Timeout.wait(RENEWAL_RETRY_DELAY_MS);
       }
     }
 
-    return AuthService.handleRenewalFailure(token);
+    return AuthService.handleRenewalFailure(token, "network");
   }
 
   private static async requestRenewedToken(
@@ -230,6 +271,7 @@ export class AuthService {
       throw new SessionRenewalError(
         "Session renewal response did not include a token",
         false,
+        "invalid-response",
       );
     }
 
@@ -238,6 +280,7 @@ export class AuthService {
       throw new SessionRenewalError(
         "Session renewal returned an invalid token",
         false,
+        "invalid-response",
       );
     }
 
@@ -250,6 +293,7 @@ export class AuthService {
       throw new SessionRenewalError(
         "Session renewal returned a token without a valid expiry",
         false,
+        "invalid-response",
       );
     }
 
@@ -260,6 +304,7 @@ export class AuthService {
       throw new SessionRenewalError(
         "Session renewal returned a token with an inconsistent claim window",
         false,
+        "invalid-response",
       );
     }
 
@@ -282,28 +327,57 @@ export class AuthService {
       return new SessionRenewalError(
         "Session renewal was rejected",
         false,
+        "invalid-response",
         status,
       );
     }
 
     if (candidate?.code === "ECONNABORTED" || candidate?.code === "ETIMEDOUT") {
-      return new SessionRenewalError("Session renewal timed out", false, status);
+      return new SessionRenewalError(
+        "Session renewal timed out",
+        false,
+        "timeout",
+        status,
+      );
     }
 
     if (typeof status === "number") {
       return new SessionRenewalError(
         `Session renewal failed with status ${status}`,
         status >= 500,
+        status >= 500 ? "5xx" : "invalid-response",
         status,
       );
     }
 
-    return new SessionRenewalError("Session renewal failed", true, status);
+    return new SessionRenewalError(
+      "Session renewal failed",
+      true,
+      "network",
+      status,
+    );
   }
 
-  private static handleRenewalFailure(token: string): string | null {
+  private static async handleRenewalFailure(
+    token: string,
+    reason: AuthRenewalFailureReason,
+  ): Promise<string | null> {
     const storedToken = AuthService.readToken();
     if (storedToken !== token) return storedToken;
+
+    EventBus.emit(EventTypes.AUTH_RENEWAL_FAILED, { reason });
+
+    // A slow renewal can outlive the token it tried to refresh; never hand an
+    // expired token back to the caller.
+    const decoded = AuthService.tryDecode(token);
+    const expired =
+      !decoded ||
+      (typeof decoded.exp === "number" &&
+        decoded.exp <= Date.now() / 1000);
+    if (expired) {
+      await AuthService.removeToken(token);
+      return null;
+    }
 
     AuthService.renewalFailure = { token, at: Date.now() };
     return token;

@@ -1,5 +1,5 @@
 import { acceptHMRUpdate, defineStore } from "pinia";
-import { ref } from "vue";
+import { onScopeDispose, ref } from "vue";
 import { EventBus, EventTypes } from "../composables/EventBus";
 import { AUTH_TOKEN_KEY, AuthService } from "../services/AuthService";
 
@@ -29,8 +29,12 @@ export function createAuthenticationStore() {
     }
 
     if (typeof window !== "undefined") {
-      EventBus.on(EventTypes.AUTH_UPDATED, () => {
+      const handleAuthUpdated = () => {
         void refreshAuthentication();
+      };
+      EventBus.on(EventTypes.AUTH_UPDATED, handleAuthUpdated);
+      onScopeDispose(() => {
+        EventBus.off(EventTypes.AUTH_UPDATED, handleAuthUpdated);
       });
       registerStorageSync();
     }

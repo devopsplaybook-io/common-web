@@ -37,8 +37,11 @@ required. The `playground/` directory demonstrates a consuming app.
 Identical `type` + `text` pairs are deduplicated and the queue keeps at most
 five messages, dropping the oldest first. Alert styles use the prefixed
 `.alert-message*` classes, so consumer stylesheets are not affected by the
-layer's global styles. `handleError(error)` logs the error and emits a
-corresponding error alert.
+layer's global styles. `handleError(error, { debug = false } = {})` logs a
+sanitized summary (message, status, method, path without query string, and
+headers with credentials redacted) and emits a corresponding error alert.
+`debug: true` logs the raw error object, which may contain credentials, and is
+intended for development only.
 
 `AppNavigation` renders plain `<a href>` links by default, which keeps
 non-Nuxt deep imports and raw-source usage working. Nuxt applications should
@@ -91,29 +94,40 @@ The canonical auth storage key is `auth_token`. During this compatibility
 release, `AUTH_TOKEN` and `AUTH_TOKEN_KEY` are read and migrated to the
 canonical key. Tokens remain in `localStorage`, matching existing applications.
 When an authenticated token has entered the final 20% of its lifetime,
-`AuthService` renews it through `POST /api/users/session/refresh` before
-returning it from `getToken()` or `getAuthHeader()`. This extends active
-sessions without requiring users to sign in again.
+`AuthService` renews it through `POST /api/users/session/refresh` in the
+background. `getToken()` and `getAuthHeader()` return the still-valid current
+token immediately and the next call sees the renewed token, so a slow refresh
+endpoint never stalls a caller.
 
 `getToken()` never rejects because of the stored or renewed token:
 
 - A corrupt or undecodable token is treated as signed out: every auth key is
   removed, `AUTH_UPDATED` is emitted and `null` is returned. Expired tokens are
-  removed and return `null`.
+  removed and return `null`. A present `exp` or `iat` claim must be a finite
+  number; tokens with string or otherwise malformed claims are corrupt.
 - A `401` or `403` from the refresh endpoint means the session was revoked:
   the session is cleared, `AUTH_UPDATED` is emitted and `null` is returned.
 - Timeouts and invalid renewal responses perform a single request. Network
   errors and `5xx` responses retry once after a 500 ms backoff.
 - When renewal still fails, the still-valid current token is returned and
-  further renewal attempts for that token are paused for 30 seconds, so a slow
-  or failing refresh endpoint is not retried on every authenticated call. The
-  worst case is about 20.5 seconds per call for network/`5xx` failures and
-  about 10 seconds for timeouts or invalid responses.
-- Renewal requests time out after 10 seconds and concurrent calls share a
-  single request. A token saved while a renewal is in flight wins over the
-  renewed value.
+  further renewal attempts for that token are paused for 30 seconds. Renewal
+  runs in the background, so the worst case is about 6.5 seconds of background
+  work (two 3 s attempts plus the 500 ms backoff) and never blocks the caller.
+  If the token expired during the attempt, the session is cleared and later
+  calls return `null`.
+- Renewal requests time out after 3 seconds and concurrent calls share a single
+  request. A token saved while a renewal is in flight wins over the renewed
+  value.
 - Renewed tokens are validated (decodable, non-empty, future `exp`, and
   `exp > iat` when `iat` is present) before they are persisted.
+- `AUTH_RENEWAL_FAILED` is emitted with `{ reason }`, where `reason` is one of
+  `timeout`, `5xx`, `network` or `invalid-response`. It carries no token, URL or
+  PII; consumers may instrument their own telemetry. This package adds no
+  OpenTelemetry metric or dependency.
+
+`removeToken()` clears every stored auth key. `removeToken(token)` is a
+compare-and-remove operation: it clears the session only when the stored token
+still equals `token`, so a stale response cannot discard a newer session.
 
 ## Authentication state and HTTP integration
 
@@ -140,13 +154,27 @@ export default defineNuxtPlugin(() => {
 });
 ```
 
-`registerAxiosAuthInterceptors(instance?)` attaches `Authorization: Bearer
-<token>` only when the request has no explicit `Authorization` header, and is
-idempotent per Axios instance (it returns `false` when already registered). It
-preserves an explicit header without renewing the token, and does not clear the
-session on a failed login to a path ending in `/users/session`; a `401` from
-any other endpoint (including `/users/session/refresh`) removes the stored token
-and emits `AUTH_UPDATED`.
+`registerAxiosAuthInterceptors(instance = axios, { allowedOrigins = [],
+loginPaths = ["/users/session"] } = {})` attaches `Authorization: Bearer
+<token>` only when the request has no explicit `Authorization` header and the
+effective target is allowed:
+
+- relative URLs, the page origin, the origin of an absolute `Config.SERVER_URL`
+  and any origin listed in `allowedOrigins` receive the token;
+- cross-origin requests to any other origin receive no token, do not trigger a
+  token renewal, and fail closed when an absolute URL cannot be parsed;
+- `allowedOrigins` entries are normalised to origins and an invalid entry
+  throws `TypeError`;
+- registration is idempotent per Axios instance and returns `false` when
+  already registered; options apply only on the first registration.
+
+A `401` clears the stored token only when the failed request used the currently
+stored token (the attached token is recorded on the request or parsed from the
+sent `Authorization` header). A stale `401` is ignored, and a `401` from a
+request that sent no token clears nothing. Login paths are configurable through
+`loginPaths`: suffix matches on the effective pathname, default
+`["/users/session"]`, replaced when configured, with empty entries ignored.
+`loginPaths: []` exempts no path.
 
 ### Server URL configuration
 
@@ -161,14 +189,24 @@ await Config.get(); // { SERVER_URL: "https://api.example.com" }
 Config.reset(); // back to "/api"
 ```
 
-A non-same-origin `SERVER_URL` receives the bearer token when the opt-in Axios
-integration is used, so it must use HTTPS and allow the application origin
-through CORS.
+`Config.set()` trims whitespace and removes trailing slashes, so
+`"https://api.example.com///"` and `"/api/"` become `"https://api.example.com"`
+and `"/api"`. In development it warns when the URL uses `http:` and is not a
+loopback host (`localhost`, `127.0.0.1`, `[::1]`). A non-same-origin
+`SERVER_URL` must use HTTPS and allow the application origin through CORS;
+cross-origin requests receive the bearer token only when that origin is the
+configured `SERVER_URL` origin or listed in `allowedOrigins`.
 
 ### Service fallbacks
 
-`UserService.isInitialized()` resolves `false` on network or HTTP errors
-instead of rejecting, so setup code can gate on it safely.
+`UserService.isInitialized({ timeoutMs = 5000, signal, cacheTtlMs = 0 } = {})`
+resolves `false` on network or HTTP errors instead of rejecting, so setup code
+can gate on it safely. Each request is bounded by `timeoutMs` (5 s by default)
+and accepts an optional `AbortSignal`. With `cacheTtlMs > 0` a successful
+`true` result is reused for that duration (keyed by URL); `false` is never
+cached and `cacheTtlMs: 0` disables the cache. Failures log a warning with a
+`reason` (`timeout`, `aborted`, `http-<status>` or `network`) and no URL, token
+or response body.
 `RefreshIntervalService.get()` falls back to `"10000"` when the stored value is
 missing or malformed; `set()` normalises valid non-negative integer strings
 (for example `"05000"` becomes `"5000"`) and throws `TypeError` otherwise.
