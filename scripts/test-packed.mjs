@@ -8,7 +8,7 @@ const temporaryDirectory = mkdtempSync(join(tmpdir(), "common-web-packed-"));
 try {
   const packOutput = execFileSync(
     "npm",
-    ["pack", "--json", "--ignore-scripts", "--pack-destination", temporaryDirectory],
+    ["pack", "--json", "--pack-destination", temporaryDirectory],
     { encoding: "utf8" },
   );
   const [{ filename }] = JSON.parse(packOutput);

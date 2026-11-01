@@ -39,10 +39,11 @@
   ],
   "scripts": {
     "dev": "nuxi dev playground",
-    "prepare": "nuxi prepare",
     "lint": "oxlint components composables services stores tests scripts playground vitest.config.ts nuxt.config.ts",
     "typecheck": "nuxi typecheck",
+    "pretest": "nuxi prepare",
     "test": "node scripts/test-packed.mjs",
+    "prebuild": "nuxi prepare",
     "build": "node scripts/build-package.mjs"
   },
   "peerDependencies": {
