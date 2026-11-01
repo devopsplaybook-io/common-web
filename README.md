@@ -196,6 +196,10 @@ authentication state to become meaningful only after hydration.
 unguarded and must only be called in the browser (a client plugin or a
 composable hook, never during SSR).
 
+`tests/ssr.spec.ts` renders the shipped components with `createSSRApp` and
+`renderToString` in a Node environment, so this server-rendering contract is
+exercised by `npm test` and by both CI workflows.
+
 ## Tokens and app-shell styles
 
 The layer loads `assets/css/tokens.css` and `assets/css/app-shell.css`.
@@ -235,8 +239,11 @@ import Loading from "@devopsplaybook.io/common-web/components/Loading.vue";
 
 ## Compatibility and release policy
 
-This release supports Nuxt `^4.0.0` and Pinia
-`^2.0.0 || ^3.0.0 || ^4.0.0`. Pinia 4 is ESM-only and requires the consuming
+This release supports Nuxt `^4.0.0` and Vue `^3.5.0`; Nuxt provides Vue, so a
+Nuxt 4 application already satisfies that peer. Pinia
+`^2.0.0 || ^3.0.0 || ^4.0.0` is an optional peer: only
+`stores/AuthenticationStore` needs it, so applications that do not use the
+store do not have to install it. Pinia 4 is ESM-only and requires the consuming
 application to install its `@vue/devtools-api` peer dependency. Nuxt 3
 applications (including Telepathy) are not supported.
 
@@ -271,11 +278,14 @@ archive is what `npm test` runs against.
 ```sh
 npm ci
 npm run lint
+npm run typecheck
 npm test
 npm run build
 npm run dev
 ```
 
-`npm test` packs the library and runs component and service tests against that
-archive. `npm run build` validates its contents and builds the playground.
+`npm run typecheck` runs `nuxi typecheck` (`vue-tsc --noEmit`) over the layer,
+the playground and the tests and fails on type errors. `npm test` packs the
+library and runs component, service and SSR tests against that archive.
+`npm run build` validates its contents and builds the playground.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution and release details.

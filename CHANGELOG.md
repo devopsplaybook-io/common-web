@@ -5,6 +5,30 @@ All notable changes to this project are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-11-01
+
+### Added
+
+- Type-check gate: `npm run typecheck` runs `nuxi typecheck` (`vue-tsc --noEmit`)
+  over the layer, playground and tests. TypeScript 6.0.3, vue-tsc 3.3.14 and
+  Node 22 types are pinned in `devDependencies`; both CI workflows run the gate.
+- Node-environment SSR smoke test (`tests/ssr.spec.ts`) rendering the shipped
+  components with `createSSRApp` and `renderToString` as part of `npm test`.
+
+### Changed
+
+- Production dependency audit is clean again: `follow-redirects` is pinned to
+  1.16.2 through the lockfile (GHSA-mrwp-f3q8-3g9p). The full dev-only audit
+  and its accepted advisories are documented in `CONTRIBUTING.md`.
+- Packaging metadata: `vue` is now an explicit peer dependency and `pinia` is
+  optional through `peerDependenciesMeta` (still a devDependency for tests).
+- The type-check gate required mechanical type annotations in
+  `tests/contrast.spec.ts`; no runtime behaviour or public API changed.
+
+### Fixed
+
+- `npm audit --omit=dev --audit-level=high` no longer fails on `main`.
+
 ## [0.8.1] - 2026-10-29
 
 ### Changed
