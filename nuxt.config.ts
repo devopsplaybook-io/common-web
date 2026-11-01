@@ -1,5 +1,8 @@
 import { fileURLToPath } from "node:url";
-import { THEME_INIT_SCRIPT } from "./composables/theme";
+import {
+  themeInitScriptEntry,
+  themeScriptNonceFromEnv,
+} from "./composables/theme";
 
 export default defineNuxtConfig({
   css: [
@@ -8,7 +11,7 @@ export default defineNuxtConfig({
   ],
   app: {
     head: {
-      script: [{ key: "common-web-theme", innerHTML: THEME_INIT_SCRIPT }],
+      script: [themeInitScriptEntry(themeScriptNonceFromEnv())],
     },
   },
 });
