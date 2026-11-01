@@ -1,13 +1,15 @@
+import { BrowserStorage } from "./BrowserStorage";
+
 export const PreferencesService = {
   get(key: string): string | null {
-    return localStorage.getItem(key);
+    return BrowserStorage.get(key);
   },
 
   set(key: string, value: string): void {
-    localStorage.setItem(key, value);
+    BrowserStorage.set(key, value);
   },
 
   remove(key: string): void {
-    localStorage.removeItem(key);
+    BrowserStorage.remove(key);
   },
 };

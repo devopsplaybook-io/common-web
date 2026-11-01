@@ -1,9 +1,11 @@
+import { BrowserStorage } from "./BrowserStorage";
+
 export class RefreshIntervalService {
   static readonly KEY = "REFRESH_INTERVAL";
   static readonly DEFAULT = "10000";
 
   static get(): string {
-    const stored = localStorage.getItem(RefreshIntervalService.KEY);
+    const stored = BrowserStorage.get(RefreshIntervalService.KEY);
     if (stored === null) return RefreshIntervalService.DEFAULT;
     return (
       RefreshIntervalService.normalise(stored) ??
@@ -18,7 +20,7 @@ export class RefreshIntervalService {
         `Invalid refresh interval: ${String(value)} (expected a non-negative integer string)`,
       );
     }
-    localStorage.setItem(RefreshIntervalService.KEY, normalised);
+    BrowserStorage.set(RefreshIntervalService.KEY, normalised);
   }
 
   private static normalise(value: string): string | null {
