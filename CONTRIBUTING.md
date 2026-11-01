@@ -7,6 +7,7 @@ Use Node.js 22 and run the repository checks before opening a pull request:
 ```sh
 npm ci
 npm run lint
+npm run typecheck
 npm test
 npm run build
 npm audit --omit=dev --audit-level=high
@@ -15,7 +16,13 @@ npm audit --omit=dev --audit-level=high
 The tests consume the generated npm tarball, not only the working tree.
 `npm run build` checks the publish file list and builds the Nuxt playground.
 
-Two quality gates run with `npm test`:
+`npm run typecheck` runs `nuxi typecheck` (`vue-tsc --noEmit`) over the shipped
+sources, the playground and the tests, and fails on any type error. `PR Check`
+and `Main Build` run it right after linting. The package ships raw TypeScript
+and Vue sources, so this gate catches type regressions that would otherwise
+surface only in a consuming application's build.
+
+Three quality gates run with `npm test`:
 
 - **Coverage thresholds** are enforced in `vitest.config.ts` (statements 95%,
   branches 88%, functions 99%, lines 97%) over the composables, services and
@@ -26,6 +33,9 @@ Two quality gates run with `npm test`:
   `color-contrast` rule is disabled there because jsdom cannot compute rendered
   contrast; WCAG AA color pairs are already gated by `tests/contrast.spec.ts`
   against the packed tokens.
+- **SSR**: `tests/ssr.spec.ts` renders the shipped components in a Node
+  environment with `createSSRApp` and `renderToString`, so the SSR
+  compatibility promised by the README is exercised on every test run.
 
 ## Scope and compatibility
 
@@ -66,20 +76,28 @@ shipped or executed inside a consuming application. A vulnerability that exists
 only in that toolchain is a build-environment risk, not a runtime risk for
 consumers.
 
-Accepted development-only advisories (2026-10-24, after the Nuxt 4.6.2 /
-Vitest 5.0.5 refresh):
+Accepted development-only advisories (2026-11-01, after the
+`follow-redirects` lockfile fix and the type-check toolchain):
 
 | Advisory | Package | Severity | Path | Status |
 | --- | --- | --- | --- | --- |
-| GHSA-86w9-cpqp-85rv | node-forge 1.4.0 | high | nuxt → @nuxt/nitro-server → nitropack → listhen → node-forge | No fixed release (1.4.0 is latest); npm's only suggested fix is downgrading Nuxt to 4.1.3, rejected |
+| GHSA-gcqx-w48m-w2h4 | `deepmerge` 4.3.1 (affected 4.2.0–4.3.1) | low | nuxt → @nuxt/nitro-server → nitropack → @rollup/plugin-node-resolve → deepmerge | No compatible release; npm's only suggested fix is downgrading Nuxt to 4.1.3, rejected |
+| GHSA-3g3m-2fjr-6pw4 | `glob` (affected 9.0.0–14.0.1) | moderate | Nuxt toolchain (@nuxt/nitro-server, nitropack, @vercel/nft, archiver, archiver-utils, zip-stream) and @vue/test-utils → js-beautify | npm's fix is downgrading @vue/test-utils to 2.4.11 or Nuxt to 4.1.3, rejected |
+| GHSA-g3hv-75wg-m249 | `minimatch` (affected <11.0.1) | moderate | @vue/test-utils → js-beautify → editorconfig → minimatch; also readdir-glob and archiver-utils | Same downgrade suggested, rejected |
 
-`npm audit` lists this single advisory as seven high entries because it is also
-aggregated through `@nuxt/nitro-server`, `@nuxt/vite-builder`,
-`@nuxt/vite-server`, `nitropack`, `listhen`, and `nuxt`.
+`npm audit` reports these three advisories as 17 entries (2 low, 15 moderate)
+because they are also aggregated through `@nuxt/nitro-server`,
+`@nuxt/vite-builder`, `@nuxt/vite-server`, `nitropack`, `nuxt`,
+`@vue/test-utils`, `archiver`, `archiver-utils`, `zip-stream`, `readdir-glob`,
+`@vercel/nft`, `@rollup/plugin-node-resolve`, `glob`, `minimatch`,
+`editorconfig`, `js-beautify` and `deepmerge`. Every entry is reachable only
+through `devDependencies`.
 
 Do not silence advisories with `npm audit fix --force`, npm `overrides`, or a
-Nuxt downgrade. Re-run both audits after every dependency update and update this
-table when the tree changes (remove the exception once `node-forge` ships a fix).
+Nuxt or `@vue/test-utils` downgrade. Re-run both audits after every dependency
+update and refresh this table when the tree changes; remove an entry once its
+toolchain ships a compatible fix. The production audit (0 vulnerabilities at
+this revision) is re-checked by `PR Check` and `Main Build` on every change.
 
 `PR Check` and `Main Build` run repository-local copies of the shared
 `common-utils` npm workflows because the shared versions still gate on a full

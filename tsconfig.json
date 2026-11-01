@@ -1,0 +1,19 @@
+{
+  "extends": "./.nuxt/tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "paths": {
+      "@devopsplaybook.io/common-web": ["./nuxt.config.ts"],
+      "@devopsplaybook.io/common-web/*": ["./*"]
+    }
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    ".data",
+    "server",
+    "playground/.nuxt",
+    "playground/.output",
+    "playground/node_modules"
+  ]
+}

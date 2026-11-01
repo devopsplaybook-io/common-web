@@ -1,5 +1,6 @@
 node_modules/
 coverage/
+.nuxt/
 playground/.nuxt/
 playground/.output/
 playground/node_modules/

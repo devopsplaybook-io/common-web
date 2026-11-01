@@ -23,7 +23,7 @@ function luminance(hex: string): number {
     return channel <= 0.03928
       ? channel / 12.92
       : Math.pow((channel + 0.055) / 1.055, 2.4);
-  });
+  }) as [number, number, number];
   return (
     0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
   );
@@ -48,17 +48,17 @@ function declarationBlock(selector: string, css: string): string {
 function tokens(block: string): TokenValues {
   const values: TokenValues = {};
   for (const [, name, value] of block.matchAll(/--([\w-]+):\s*(#[0-9a-fA-F]+)/g)) {
-    values[name] = value;
+    if (name && value) values[name] = value;
   }
   return values;
 }
 
 function expectAaCompliant(theme: TokenValues, label: string): void {
   const pairs: Array<[string, string, string]> = [
-    ["success", theme["color-on-success"], theme["color-success"]],
-    ["error", theme["color-on-error"], theme["color-error"]],
-    ["warning", theme["color-on-warning"], theme["color-warning"]],
-    ["default alert", theme["color-text-inverse"], DEFAULT_ALERT_BACKGROUND],
+    ["success", theme["color-on-success"]!, theme["color-success"]!],
+    ["error", theme["color-on-error"]!, theme["color-error"]!],
+    ["warning", theme["color-on-warning"]!, theme["color-warning"]!],
+    ["default alert", theme["color-text-inverse"]!, DEFAULT_ALERT_BACKGROUND],
   ];
   for (const [name, foreground, background] of pairs) {
     const ratio = contrastRatio(foreground, background);
