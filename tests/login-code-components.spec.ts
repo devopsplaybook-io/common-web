@@ -850,3 +850,105 @@ describe("AuthorizeDeviceCard", () => {
     expect(wrapper.text()).toContain("Be careful");
   });
 });
+
+describe("login-code theming and embedding", () => {
+  it("exposes the lc-theme token layer on every component root", async () => {
+    const input = mountComponent(LoginCodeInput, { modelValue: "" });
+    expect(input.get(".login-code-input").classes()).toContain("lc-theme");
+
+    const card = mountComponent(LoginWithCodeCard, {
+      service: asService(newDeviceService()),
+      autoStart: false,
+    });
+    expect(card.get("section").classes()).toContain("lc-theme");
+
+    const authorize = mountComponent(AuthorizeDeviceCard, {
+      service: asService(authorizeService()),
+    });
+    await settle();
+    expect(authorize.get("section").classes()).toContain("lc-theme");
+  });
+
+  it("renders the card chrome by default and drops it for plain", async () => {
+    const card = mountComponent(LoginWithCodeCard, {
+      service: asService(newDeviceService()),
+      autoStart: false,
+    });
+    expect(card.classes()).toContain("login-with-code-card--card");
+    expect(card.classes()).not.toContain("login-with-code-card--plain");
+
+    const plainCard = mountComponent(LoginWithCodeCard, {
+      service: asService(newDeviceService()),
+      autoStart: false,
+      variant: "plain",
+    });
+    expect(plainCard.classes()).toContain("login-with-code-card--plain");
+    expect(plainCard.classes()).not.toContain("login-with-code-card--card");
+
+    const authorize = mountComponent(AuthorizeDeviceCard, {
+      service: asService(authorizeService()),
+    });
+    await settle();
+    expect(authorize.classes()).toContain("authorize-device-card--card");
+    expect(authorize.classes()).not.toContain("authorize-device-card--plain");
+
+    const plainAuthorize = mountComponent(AuthorizeDeviceCard, {
+      service: asService(authorizeService()),
+      variant: "plain",
+    });
+    await settle();
+    expect(plainAuthorize.classes()).toContain("authorize-device-card--plain");
+    expect(plainAuthorize.classes()).not.toContain(
+      "authorize-device-card--card",
+    );
+  });
+
+  it("renders the configured heading level and keeps aria-labelledby wired", async () => {
+    for (const [level, tag] of [
+      [2, "h2"],
+      [3, "h3"],
+      [4, "h4"],
+    ] as const) {
+      const card = mountComponent(LoginWithCodeCard, {
+        service: asService(newDeviceService()),
+        autoStart: false,
+        headingLevel: level,
+      });
+      const heading = card.get(tag);
+      expect(heading.attributes("id")).toBe(
+        card.get("section").attributes("aria-labelledby"),
+      );
+      expect(card.find("h2").exists()).toBe(level === 2);
+      expect(card.find("h3").exists()).toBe(level === 3);
+      expect(card.find("h4").exists()).toBe(level === 4);
+      card.unmount();
+      wrappers.pop();
+
+      const authorize = mountComponent(AuthorizeDeviceCard, {
+        service: asService(authorizeService()),
+        headingLevel: level,
+      });
+      const authorizeHeading = authorize.get(tag);
+      expect(authorizeHeading.attributes("id")).toBe(
+        authorize.get("section").attributes("aria-labelledby"),
+      );
+      expect(authorize.find("h2").exists()).toBe(level === 2);
+      authorize.unmount();
+      wrappers.pop();
+    }
+  });
+
+  it("defaults the heading to h2", async () => {
+    const card = mountComponent(LoginWithCodeCard, {
+      service: asService(newDeviceService()),
+      autoStart: false,
+    });
+    expect(card.get("h2").text()).toBe("Sign in with a code");
+
+    const authorize = mountComponent(AuthorizeDeviceCard, {
+      service: asService(authorizeService()),
+    });
+    await settle();
+    expect(authorize.get("h2").text()).toBe("Approve a sign-in");
+  });
+});

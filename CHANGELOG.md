@@ -23,10 +23,31 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   localisable through `labels` props.
 - A playground page plus component, service, composable, SSR, accessibility and
   no-Nuxt-import tests.
+- `--color-on-primary` in `assets/css/tokens.css` (`#ffffff` in the light theme,
+  `#171717` in both dark blocks) for primary-button labels; `tests/contrast.spec.ts`
+  gates it at AA against `--color-primary`.
 
-Everything is additive: no existing export, prop or behaviour changed, and no
-dependency was added or upgraded (the service reuses the existing axios
-dependency).
+### Changed
+
+- The login-with-code components theme themselves from the host application's
+  tokens through an internal `--lc-*` layer: host tokens win, token-less and
+  partial palettes get theme-aware `light-dark()` fallbacks, and the raised
+  surface is derived with `color-mix()` when `--color-surface-raised` is absent.
+  This fixes the components rendering light-only panels, invisible code and
+  white-on-light buttons in a dark non-layer host such as Planner.
+- Warning and error states are callouts (accent border, text in the host text
+  colour) instead of solid fills, so `--color-on-warning`/`--color-on-error` are
+  no longer required by these components.
+- Primary buttons use `--color-on-primary`; secondary buttons and the input use
+  the host surface, border and text tokens; focus rings follow `--color-primary`.
+- `LoginWithCodeCard` and `AuthorizeDeviceCard` accept `variant` (`card` |
+  `plain`) and `headingLevel` (`2` | `3` | `4`) to embed in an existing card or
+  section without duplicated chrome or headings.
+- Spacing goes through `--lc-space`, bridging `--space-base` and `--space-md`.
+
+The API stays additive: no existing export, prop or behaviour changed, and no
+runtime dependency was added or upgraded (the service reuses the existing axios
+dependency; `postcss` is a dev-only dependency of the theme-contract test).
 
 ## [0.13.0] - 2026-11-25
 

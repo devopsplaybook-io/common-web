@@ -1,6 +1,12 @@
 <template>
-  <section class="authorize-device-card" :aria-labelledby="titleId">
-    <h2 :id="titleId" class="authorize-device-title">{{ copy.title }}</h2>
+  <section
+    class="authorize-device-card lc-theme"
+    :class="variantClass"
+    :aria-labelledby="titleId"
+  >
+    <component :is="titleTag" :id="titleId" class="authorize-device-title">
+      {{ copy.title }}
+    </component>
     <p class="authorize-device-warning">{{ copy.warning }}</p>
 
     <p v-if="loading" class="authorize-device-preparing">
@@ -169,10 +175,14 @@ const props = withDefaults(
   defineProps<{
     service?: LoginCodeService;
     labels?: Partial<AuthorizeDeviceCardLabels>;
+    variant?: "card" | "plain";
+    headingLevel?: 2 | 3 | 4;
   }>(),
   {
     service: () => new LoginCodeService(),
     labels: undefined,
+    variant: "card",
+    headingLevel: 2,
   },
 );
 
@@ -189,6 +199,9 @@ const copy = computed<AuthorizeDeviceCardLabels>(() => ({
 const uid = useId();
 const titleId = `authorize-device-title-${uid}`;
 const passwordId = `authorize-device-password-${uid}`;
+
+const titleTag = computed(() => `h${props.headingLevel}` as "h2" | "h3" | "h4");
+const variantClass = computed(() => `authorize-device-card--${props.variant}`);
 
 const capabilities = ref<LoginCodeCapabilities | null>(null);
 const loading = ref(true);
@@ -424,47 +437,105 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* Internal theme layer: host tokens win, theme-aware fallbacks otherwise. */
+.lc-theme {
+  --lc-space-xs: var(--space-xs, 0.25rem);
+  --lc-space-sm: var(--space-sm, 0.5rem);
+  --lc-space: var(--space-base, var(--space-md, 1rem));
+  --lc-space-lg: var(--space-lg, 1.5rem);
+  --lc-space-xl: var(--space-xl, 2rem);
+
+  --lc-surface: var(--color-surface, #fff);
+  --lc-raised: var(--color-surface-raised, #f5f5f5);
+  --lc-text: var(--color-text, #171717);
+  --lc-muted: var(--color-text-muted, #5f6368);
+  --lc-border: var(--color-border, #d6d6d6);
+  --lc-primary: var(--color-primary, #c62828);
+  --lc-primary-hover: var(--color-primary-hover, #a61f1f);
+  --lc-on-primary: var(--color-on-primary, #fff);
+  --lc-warning: var(--color-warning, #8a5a00);
+  --lc-danger: var(--color-error, var(--color-danger, #b3261e));
+  --lc-success: var(--color-success, #2e7d32);
+}
+
+@supports (background: color-mix(in srgb, red, blue)) {
+  .lc-theme {
+    --lc-raised: var(--color-surface-raised,
+      color-mix(in srgb, var(--lc-text) 5%, var(--lc-surface)));
+    --lc-warning-bg: color-mix(in srgb, var(--lc-warning) 14%, var(--lc-surface));
+    --lc-danger-bg: color-mix(in srgb, var(--lc-danger) 12%, var(--lc-surface));
+  }
+}
+
+@supports (color: light-dark(#000, #fff)) {
+  .lc-theme {
+    --lc-surface: var(--color-surface, light-dark(#fff, #1b242c));
+    --lc-text: var(--color-text, light-dark(#171717, #d7dee4));
+    --lc-muted: var(--color-text-muted, light-dark(#5f6368, #8a99a6));
+    --lc-border: var(--color-border, light-dark(#d6d6d6, #2e3a44));
+    --lc-primary: var(--color-primary, light-dark(#c62828, #ff8a80));
+    --lc-primary-hover: var(--color-primary-hover, light-dark(#a61f1f, #ffb4ab));
+    --lc-on-primary: var(--color-on-primary, light-dark(#fff, #171717));
+    --lc-warning: var(--color-warning, light-dark(#8a5a00, #f0b429));
+    --lc-danger: var(--color-error, var(--color-danger, light-dark(#b3261e, #ff8a80)));
+    --lc-success: var(--color-success, light-dark(#2e7d32, #66bb6a));
+  }
+}
+
 .authorize-device-card {
   max-width: 32rem;
-  padding: clamp(var(--space-base, 1rem), 3vw, var(--space-xl, 2rem));
-  color: var(--color-text, #171717);
-  background: var(--color-surface, #fff);
-  border: 1px solid var(--color-border, #d6d6d6);
+  color: var(--lc-text);
+}
+
+.authorize-device-card--card {
+  padding: clamp(var(--lc-space), 3vw, var(--lc-space-xl));
+  background: var(--lc-surface);
+  border: 1px solid var(--lc-border);
   border-radius: var(--radius-lg, 0.5rem);
   box-shadow: var(--shadow-sm, 0 1px 2px rgb(0 0 0 / 10%));
 }
 
 .authorize-device-title {
-  margin: 0 0 var(--space-sm, 0.5rem);
+  margin: 0 0 var(--lc-space-sm);
   font-size: var(--text-xl, 1.25rem);
   line-height: 1.3;
 }
 
 .authorize-device-warning {
-  padding: var(--space-sm, 0.5rem) var(--space-base, 1rem);
-  margin: 0 0 var(--space-base, 1rem);
-  color: var(--color-on-warning, #fff);
+  padding: var(--lc-space-sm) var(--lc-space);
+  margin: 0 0 var(--lc-space);
+  color: var(--lc-text);
   font-size: var(--text-sm, 0.875rem);
   font-weight: 600;
-  background: var(--color-warning, #8a5a00);
+  background: transparent;
+  border: 1px solid var(--lc-warning);
+  border-left: 3px solid var(--lc-warning);
   border-radius: var(--radius-sm, 0.25rem);
+}
+
+@supports (background: color-mix(in srgb, red, blue)) {
+  .lc-theme .authorize-device-warning {
+    background: var(--lc-warning-bg);
+    border-color: transparent;
+    border-left-color: var(--lc-warning);
+  }
 }
 
 .authorize-device-preparing,
 .authorize-device-unavailable {
-  margin: 0 0 var(--space-base, 1rem);
-  color: var(--color-text-muted, #5f6368);
+  margin: 0 0 var(--lc-space);
+  color: var(--lc-muted);
 }
 
 .authorize-device-form {
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm, 0.5rem);
+  gap: var(--lc-space-sm);
 }
 
 .authorize-device-button {
   align-self: flex-start;
-  padding: var(--space-sm, 0.5rem) var(--space-base, 1rem);
+  padding: var(--lc-space-sm) var(--lc-space);
   font: inherit;
   font-size: var(--text-sm, 0.875rem);
   border-radius: var(--radius-md, 0.375rem);
@@ -472,7 +543,7 @@ onUnmounted(() => {
 }
 
 .authorize-device-button:focus-visible {
-  outline: 3px solid var(--color-primary, #c62828);
+  outline: 2px solid var(--lc-primary);
   outline-offset: 2px;
 }
 
@@ -482,50 +553,50 @@ onUnmounted(() => {
 }
 
 .authorize-device-button-primary {
-  color: #fff;
-  background: var(--color-primary, #c62828);
-  border: 1px solid var(--color-primary, #c62828);
+  color: var(--lc-on-primary);
+  background: var(--lc-primary);
+  border: 1px solid var(--lc-primary);
 }
 
 .authorize-device-button-primary:hover:not(:disabled) {
-  background: var(--color-primary-hover, #a61f1f);
-  border-color: var(--color-primary-hover, #a61f1f);
+  background: var(--lc-primary-hover);
+  border-color: var(--lc-primary-hover);
 }
 
 .authorize-device-button-secondary {
-  color: var(--color-text, #171717);
-  background: var(--color-surface, #fff);
-  border: 1px solid var(--color-text-muted, #5f6368);
+  color: var(--lc-text);
+  background: transparent;
+  border: 1px solid var(--lc-border);
 }
 
 .authorize-device-error {
-  margin: var(--space-sm, 0.5rem) 0;
-  color: var(--color-error, #c62828);
+  margin: var(--lc-space-sm) 0;
+  color: var(--lc-danger);
   font-size: var(--text-sm, 0.875rem);
   font-weight: 600;
 }
 
 .authorize-device-preview {
-  padding: var(--space-base, 1rem);
-  margin-top: var(--space-base, 1rem);
-  background: var(--color-surface-raised, #f5f5f5);
+  padding: var(--lc-space);
+  margin-top: var(--lc-space);
+  background: var(--lc-raised);
   border-radius: var(--radius-md, 0.375rem);
 }
 
 .authorize-device-sign-in {
-  margin: 0 0 var(--space-sm, 0.5rem);
+  margin: 0 0 var(--lc-space-sm);
 }
 
 .authorize-device-details {
   display: grid;
   grid-template-columns: max-content 1fr;
-  gap: var(--space-xs, 0.25rem) var(--space-base, 1rem);
-  margin: 0 0 var(--space-base, 1rem);
+  gap: var(--lc-space-xs) var(--lc-space);
+  margin: 0 0 var(--lc-space);
   font-size: var(--text-sm, 0.875rem);
 }
 
 .authorize-device-details dt {
-  color: var(--color-text-muted, #5f6368);
+  color: var(--lc-muted);
   font-weight: 600;
 }
 
@@ -537,39 +608,39 @@ onUnmounted(() => {
 .authorize-device-password {
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs, 0.25rem);
-  margin-bottom: var(--space-base, 1rem);
+  gap: var(--lc-space-xs);
+  margin-bottom: var(--lc-space);
 }
 
 .authorize-device-label {
-  color: var(--color-text, #171717);
+  color: var(--lc-text);
   font-size: var(--text-sm, 0.875rem);
   font-weight: 600;
 }
 
 .authorize-device-input {
-  padding: var(--space-sm, 0.5rem) var(--space-base, 1rem);
-  color: var(--color-text, #171717);
+  padding: var(--lc-space-sm) var(--lc-space);
+  color: var(--lc-text);
   font: inherit;
-  background: var(--color-surface, #fff);
-  border: 2px solid var(--color-border, #d6d6d6);
+  background: var(--lc-surface);
+  border: 2px solid var(--lc-border);
   border-radius: var(--radius-md, 0.375rem);
 }
 
 .authorize-device-input:focus-visible {
-  outline: 3px solid var(--color-primary, #c62828);
+  outline: 2px solid var(--lc-primary);
   outline-offset: 2px;
 }
 
 .authorize-device-success {
-  margin: 0 0 var(--space-base, 1rem);
-  color: var(--color-success, #2e7d32);
+  margin: 0 0 var(--lc-space);
+  color: var(--lc-success);
   font-weight: 600;
 }
 
 .authorize-device-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-sm, 0.5rem);
+  gap: var(--lc-space-sm);
 }
 </style>

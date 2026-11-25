@@ -317,6 +317,12 @@ is local and generic; the server message is never rendered. Both cards render a
 live region only for status changes, and `AuthorizeDeviceCard` keeps the warning
 visible in every state.
 
+Both cards accept `variant` (`"card"` by default, or `"plain"` to drop their own
+border, radius, background, shadow and outer padding when they are embedded in a
+host card or section) and `headingLevel` (`2`, `3` or `4`, default `2`) so the
+title matches the surrounding heading structure. The `aria-labelledby` wiring
+follows the rendered heading id.
+
 ### Using the layer
 
 With the layer extended, the components and composable are auto-imported:
@@ -371,8 +377,99 @@ import { LoginCodeService } from "@devopsplaybook.io/common-web/services/LoginCo
 
 The shipped files import only `vue`, `axios`, `./Config`, the login-code service
 and each other; a regression test fails if Nuxt auto-imports (`#imports`,
-`useRuntimeConfig`, `navigateTo`, …) creep in. The feature adds no dependency:
-the service reuses the package's existing axios dependency.
+`useRuntimeConfig`, `navigateTo`, …) creep in. The feature adds no runtime
+dependency: the service reuses the package's existing axios dependency (the
+theme-contract test adds `postcss` as a dev-only dependency).
+
+### Theming and non-layer hosts
+
+`LoginCodeInput`, `LoginWithCodeCard` and `AuthorizeDeviceCard` theme themselves
+from the host application's tokens, so they work in the Nuxt layer (which ships
+`assets/css/tokens.css`) and when the SFCs are imported directly into a plain
+Vue/Nuxt app that defines only a partial palette. Every component root carries
+the `lc-theme` class and maps the host tokens onto internal `--lc-*` variables.
+
+No token is strictly required: each has a fallback. For a faithful theme, define:
+
+| Token | Use |
+| --- | --- |
+| `--color-surface` | card and input background |
+| `--color-text` | body, code, labels and button text |
+| `--color-text-muted` | instructions, countdowns and secondary labels |
+| `--color-border` | card, input and secondary-button borders |
+| `--color-primary`, `--color-primary-hover` | primary buttons, links, focus rings |
+| `--color-on-primary` | primary-button label |
+| `--color-warning` | warning callout accent (used as a tint, not a fill) |
+| `--color-error` **or** `--color-danger` | error text and the invalid input border |
+| `--color-success` | approval confirmation |
+
+Optional: `--color-surface-raised` (otherwise derived with `color-mix()` as 5 %
+of the text colour over the surface, tinted with the host palette) and either
+`--space-base` or `--space-md` (plus `--space-xs/sm/lg/xl` when present). Host
+tokens always win; the fallbacks only fill the gaps.
+
+Warning and error states are callouts — text in `--lc-text` on a tinted (or
+transparent) background with an accent border — so hosts do not need
+`--color-on-warning` or `--color-on-error` for these components.
+
+The `light-dark()` fallbacks used by token-less hosts follow the inherited CSS
+`color-scheme`. The layer and Planner set it; a token-less host should too:
+
+```css
+:root {
+  color-scheme: light dark;
+}
+```
+
+Browsers without `light-dark()` or `color-mix()` fall back to the light palette
+and a transparent warning callout with a solid accent border. Text contrast
+follows the host tokens: with a faithful palette the components meet WCAG 2.2 AA
+in light and dark. Secondary text is bounded by `--color-text-muted`, so a muted
+token that is too light (for example a grey below 4.5:1 on the surface) caps the
+contrast the library can offer.
+
+Override individual values through the `--lc-*` variables on the component or any
+ancestor without redefining the whole host palette:
+
+```css
+.lc-theme {
+  --lc-space-sm: var(--space-sm, 0.5rem);
+  --lc-space: var(--space-base, var(--space-md, 1rem));
+  --lc-space-lg: var(--space-lg, 1.5rem);
+  --lc-space-xl: var(--space-xl, 2rem);
+
+  --lc-surface: var(--color-surface, #fff);
+  --lc-raised: var(--color-surface-raised, #f5f5f5);
+  --lc-text: var(--color-text, #171717);
+  --lc-muted: var(--color-text-muted, #5f6368);
+  --lc-border: var(--color-border, #d6d6d6);
+  --lc-primary: var(--color-primary, #c62828);
+  --lc-primary-hover: var(--color-primary-hover, #a61f1f);
+  --lc-on-primary: var(--color-on-primary, #fff);
+  --lc-warning: var(--color-warning, #8a5a00);
+  --lc-danger: var(--color-error, var(--color-danger, #b3261e));
+  --lc-success: var(--color-success, #2e7d32);
+}
+```
+
+Embed the cards in an existing card or section with `variant="plain"` (no border,
+radius, background, shadow or outer padding) and match the heading structure with
+`headingLevel`:
+
+```vue
+<article class="login-card">
+  <LoginWithCodeCard
+    :service="service"
+    variant="plain"
+    :heading-level="3"
+    @approved="signedIn"
+  />
+</article>
+```
+
+`tests/theme-contract.spec.ts` guards the contract: no raw colour literals in
+colour declarations, only documented host tokens, `--color-on-primary` shipped in
+every theme block, and the spacing bridge through `--lc-space`.
 
 ## Authentication state and HTTP integration
 
@@ -494,17 +591,19 @@ exercised by `npm test` and by both CI workflows.
 
 The layer loads `assets/css/tokens.css` and `assets/css/app-shell.css`.
 Tokens include `--color-*` (including the per-status foreground tokens
-`--color-on-success`, `--color-on-error` and `--color-on-warning` used with
-`--color-success`, `--color-error` and `--color-warning`),
+`--color-on-primary`, `--color-on-success`, `--color-on-error` and
+`--color-on-warning` used with `--color-primary`, `--color-success`,
+`--color-error` and `--color-warning`),
 `--space-*`, `--text-*`, `--radius-*`, `--shadow-*`, `--header-height`, and
 `--app-height`. Dark mode can be selected with `data-theme="dark"` or comes
 from `prefers-color-scheme` when no explicit light preference is set. Status
 colors meet WCAG AA against their `--color-on-*` foreground tokens in both
 themes. `--color-primary` and `--color-primary-hover` are defined in both
 themes and meet AA (4.5:1) on the shipped `--color-surface` and
-`--color-surface-raised` backgrounds. `tests/contrast.spec.ts` gates text,
-muted text, primary, primary hover and the status color pairs in the light and
-both dark blocks. The `dpb-fade-in` and `dpb-blink` helper classes are disabled
+`--color-surface-raised` backgrounds, and `--color-on-primary` meets AA on
+`--color-primary`. `tests/contrast.spec.ts` gates text,
+muted text, primary, primary hover, the primary label and the status color pairs
+in the light and both dark blocks. The `dpb-fade-in` and `dpb-blink` helper classes are disabled
 under `prefers-reduced-motion: reduce`.
 
 Load app-specific CSS after the layer and redefine only the values you need:
