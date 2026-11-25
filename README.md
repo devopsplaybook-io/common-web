@@ -296,7 +296,8 @@ linked by `aria-describedby`.
 
 `<LoginWithCodeCard>` shows the created code with copy, refresh and expiry
 countdowns, a polite live status region and Cancel / Use password instead /
-Try again actions. Props: `service`, `autoStart` (default `true`), `onSession`
+Try again actions. Try again appears after an error, expiry or cancellation and
+starts a fresh request. Props: `service`, `autoStart` (default `true`), `onSession`
 and `labels` (a `Partial` of the English defaults: `title`, `instructions`,
 `codeLabel`, `preparing`, `waiting`, `approved`, `expired`, `cancelled`, `error`,
 `unavailable`, `refreshIn` / `expiresIn` (`{seconds}` placeholder), `copy`,

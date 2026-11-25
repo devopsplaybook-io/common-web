@@ -172,9 +172,13 @@ const canCancel = computed(
     loginCode.status.value === "waiting",
 );
 
-const canRetry = computed(
-  () => loginCode.status.value === "error" && !unavailable.value,
-);
+const canRetry = computed(() => {
+  const status = loginCode.status.value;
+  return (
+    !unavailable.value &&
+    (status === "error" || status === "expired" || status === "cancelled")
+  );
+});
 
 const statusText = computed(() => {
   if (unavailable.value) return copy.value.unavailable;

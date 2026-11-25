@@ -18,8 +18,9 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   recursive polling with exponential backoff, pause/resume on visibility and
   focus, abortable requests, session capture and terminal states.
 - `LoginCodeInput`, `LoginWithCodeCard` and `AuthorizeDeviceCard`: accessible
-  code entry, the requesting-device flow and the approver flow with an optional
-  password step-up, all localisable through `labels` props.
+  code entry, the requesting-device flow (with a fresh request after expiry or
+  cancellation) and the approver flow with an optional password step-up, all
+  localisable through `labels` props.
 - A playground page plus component, service, composable, SSR, accessibility and
   no-Nuxt-import tests.
 

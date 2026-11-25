@@ -395,6 +395,7 @@ describe("LoginWithCodeCard", () => {
       await settle();
 
       expect(wrapper.get('[role="status"]').text()).toBe(copy);
+      expect(wrapper.text()).toContain("Try again");
       wrapper.unmount();
       wrappers.pop();
     }
@@ -441,6 +442,30 @@ describe("LoginWithCodeCard", () => {
     await settle();
 
     expect(service.create).not.toHaveBeenCalled();
+  });
+
+  it("offers a fresh request after expiry", async () => {
+    const service = newDeviceService({
+      poll: vi.fn().mockResolvedValueOnce({
+        status: "expired",
+        expiresAt: "2026-11-25T18:00:00.000Z",
+        serverTime: SERVER_TIME,
+      }),
+    });
+    const wrapper = mountComponent(LoginWithCodeCard, {
+      service: asService(service),
+    });
+    await settle();
+    await vi.advanceTimersByTimeAsync(2000);
+    await settle();
+
+    expect(wrapper.get('[role="status"]').text()).toBe("Code expired");
+
+    await buttonWithText(wrapper, "Try again").trigger("click");
+    await settle();
+
+    expect(wrapper.get('[role="status"]').text()).toBe("Waiting for approval");
+    expect(service.create).toHaveBeenCalledTimes(2);
   });
 
   it("offers a retry after an error", async () => {
