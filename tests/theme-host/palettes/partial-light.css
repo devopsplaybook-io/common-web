@@ -1,0 +1,32 @@
+/* Planner's light palette, exactly as planner-web/assets/css/tokens.css defines
+   it, and nothing else: no --color-surface-raised, --color-error,
+   --color-on-warning, --space-base and no common-web tokens.css. */
+:root {
+  color-scheme: light;
+
+  --color-primary: #0f6da0;
+  --color-primary-hover: #0c5c88;
+  --color-on-primary: #ffffff;
+
+  --color-text: #1d2832;
+  --color-text-secondary: #455869;
+  --color-text-muted: #6b7a88;
+
+  --color-bg: #f4f6f8;
+  --color-surface: #ffffff;
+  --color-surface-hover: #eef1f4;
+
+  --color-border: #dbe1e7;
+  --color-border-strong: #b9c3cd;
+
+  --color-success: #2e7d32;
+  --color-warning: #b26a00;
+  --color-danger: #c62828;
+
+  --space-md: 1em;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+}

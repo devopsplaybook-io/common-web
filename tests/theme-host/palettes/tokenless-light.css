@@ -1,0 +1,10 @@
+/* Token-less host: only the colour scheme is declared, so every component
+   colour comes from the documented light-dark() fallbacks. */
+:root {
+  color-scheme: light;
+}
+
+body {
+  background: Canvas;
+  color: CanvasText;
+}

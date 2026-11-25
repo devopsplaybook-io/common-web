@@ -1,0 +1,11 @@
+/* Screenshot-only stylesheet (Playwright `stylePath`). The countdown ticks
+   every second; hiding it (while keeping its layout box) makes the element
+   snapshots deterministic without a fake clock. */
+.login-with-code-countdown {
+  visibility: hidden !important;
+}
+
+/* Focus is an interaction artefact, not part of the rendered theme. */
+[data-scenario] :focus {
+  outline: none !important;
+}

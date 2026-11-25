@@ -20,6 +20,7 @@ const NuxtLink = resolveComponent("NuxtLink");
 const links = [
   { label: "Home", to: "/" },
   { label: "Login with code", to: "/login-with-code" },
+  { label: "Theme harness", to: "/theme-harness" },
 ];
 useAppHeight();
 </script>

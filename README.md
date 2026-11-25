@@ -471,6 +471,99 @@ radius, background, shadow or outer padding) and match the heading structure wit
 colour declarations, only documented host tokens, `--color-on-primary` shipped in
 every theme block, and the spacing bridge through `--lc-space`.
 
+## Testing the theming contract
+
+`tests/accessibility.spec.ts` disables axe's `color-contrast` rule because jsdom
+cannot resolve the CSS cascade or `var()`. The real-browser harness in `e2e/`
+closes that gap: it renders the three login-with-code components in every
+supported host mode, reads `getComputedStyle` in Chromium, and asserts WCAG 2.2
+AA contrast (4.5:1) for the text/background pairs of the components.
+
+### What it covers
+
+| Host mode | Page | Theme |
+| --- | --- | --- |
+| `partial-dark` | plain Vite host, Planner's dark palette only | `color-scheme: dark` |
+| `partial-light` | plain Vite host, Planner's light palette only | `color-scheme: light` |
+| `tokenless-dark` | plain Vite host, no `--color-*`/`--space-*` | `color-scheme: dark` |
+| `tokenless-light` | plain Vite host, no `--color-*`/`--space-*` | `color-scheme: light` |
+| `layer-light` | built playground layer, `/theme-harness` | `data-theme="light"` |
+| `layer-dark` | built playground layer, `/theme-harness` | `data-theme="dark"` |
+
+The partial palettes are Planner's exact tokens with the gaps Planner really has
+(no `--color-surface-raised`, `--color-error`, `--color-on-warning` or
+`--space-base`, and no common-web `tokens.css`); the token-less pages declare
+only `color-scheme`, so the components fall back to their documented
+`light-dark()` values. Both fixtures import the components from the packed
+tarball, exactly like a consumer.
+
+Scenarios (each a `[data-scenario]` section rendered by both hosts): the
+`LoginWithCodeCard` waiting state, its `variant="plain"` embedding and its retry
+state; the `AuthorizeDeviceCard` code-entry, preview and rate-limited error
+states; and `LoginCodeInput` in its normal and error states. Per scenario the
+harness checks code text, muted labels, primary and secondary button labels,
+the warning callout, error text and input text against their actual backgrounds.
+Structural assertions pin the measured colours to the host tokens, require the
+`partial-dark` code panel to be a dark surface (relative luminance < 0.1) with
+host text rather than light-theme `#171717`, require the dark primary label to be
+the host `--color-on-primary` (not `#fff`), and prove `variant="plain"` paints no
+card border, shadow, background or padding. Element screenshots
+(`toHaveScreenshot`, 1 % diff budget) snapshot every scenario and host mode.
+
+### Running it locally
+
+```sh
+npx playwright install chromium   # once
+npm run build                     # produces playground/.output for the layer host
+npm run test:e2e
+```
+
+`npm run test:e2e` packs the tarball (`npm pack`), extracts it to
+`node_modules/.cache/common-web-e2e/package`, starts both host servers and
+runs Playwright; the Vite fixture imports the packed sources. Pass Playwright
+flags through, for example `npm run test:e2e -- --update-snapshots` or
+`npm run test:e2e -- -g partial-dark`. The servers are the Vite fixture on port
+4310 and the built playground's Node server on port 4311; set
+`THEME_FIXTURE_PORT` / `THEME_LAYER_PORT` if those ports are taken. The layer
+host needs `npm run build` first.
+
+CI runs the same command in the blocking `theme-contrast` job of `PR Check`
+after `test-and-build`, and uploads the Playwright report and screenshot diffs
+when it fails.
+
+### Required `color-scheme` and host palettes
+
+Non-layer and token-less hosts must declare the CSS `color-scheme` so the
+components' `light-dark()` fallbacks follow the theme:
+
+```css
+:root {
+  color-scheme: light dark;
+}
+```
+
+To add a host palette, add a stylesheet under `tests/theme-host/palettes/`, an
+HTML page that loads `harness.css` and that stylesheet, and a `HostMode` entry in
+`e2e/palettes.ts` with the tokens the page exposes and the colours the components
+should render. New scenarios are declared once in `e2e/scenarios.ts` and must be
+rendered by both `tests/theme-host/App.vue` and
+`playground/pages/theme-harness.vue`, each wrapped in
+`<section data-scenario="…">`. Regenerate baselines after intentional visual
+changes.
+
+Screenshot baselines are Linux/Chromium with the DejaVu font set only (CI
+installs `fonts-dejavu-core`). Do not commit macOS or Windows baselines;
+regenerate them on Linux with `--update-snapshots`.
+
+### Known exemption: Planner's light muted token
+
+Planner's light `--color-text-muted: #6b7a88` is 4.41:1 on `#ffffff` and
+4.01:1 on the derived raised panel, below AA 4.5. The component cannot exceed a
+host token, so the harness still pins the muted label to that host token but
+applies a documented 3.9 floor to the `partial-light` muted pairs only; all other
+pairs keep the 4.5:1 minimum. Raising the token is a Planner change (for example
+to `#5f6368`), after which the exemption can be removed.
+
 ## Authentication state and HTTP integration
 
 `AuthService.saveToken()` and `removeToken()` emit

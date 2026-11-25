@@ -5,6 +5,11 @@ playground/.nuxt/
 playground/.output/
 playground/node_modules/
 
+# Playwright (theme-contrast harness)
+playwright-report/
+test-results/
+blob-report/
+
 # Environment files and secrets (never commit)
 .env
 .env.*
