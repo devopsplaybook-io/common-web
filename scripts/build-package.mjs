@@ -52,7 +52,9 @@ try {
       path.startsWith("tests/") ||
       path.startsWith("playground/") ||
       path.startsWith("scripts/") ||
-      path.startsWith("coverage/"),
+      path.startsWith("coverage/") ||
+      path.startsWith("e2e/") ||
+      path === "playwright.config.ts",
   );
 
   if (forbiddenFiles.length > 0) {

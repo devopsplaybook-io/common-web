@@ -5,6 +5,41 @@ All notable changes to this project are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - 2026-11-25
+
+### Added
+
+- A real-browser theme-contrast harness (`npm run test:e2e`, Playwright +
+  Chromium, specs in `e2e/`) that renders `LoginWithCodeCard`,
+  `AuthorizeDeviceCard` and `LoginCodeInput` in six host modes — the Nuxt layer
+  in light and dark, a plain Vite host with Planner's partial dark and light
+  palettes, and token-less hosts in both schemes — then measures WCAG 2.2 AA
+  contrast for code text, muted labels, primary and secondary button labels, the
+  warning callout, error text and input text from real `getComputedStyle`
+  values. It also pins the measured colours to the host tokens, proves the
+  `partial-dark` code panel is a dark surface using host text (the reported
+  regression), and snapshots every scenario and host mode.
+- `tests/theme-host/`: a plain Vite + Vue fixture (no Nuxt, no common-web layer,
+  no `tokens.css`) importing the components from the packed tarball with a
+  no-network `LoginCodeService` stub, plus the `partial-dark`, `partial-light`,
+  `tokenless-dark` and `tokenless-light` palette pages.
+- `playground/pages/theme-harness.vue` (`/theme-harness`) with the same
+  scenarios inside the layer, used for the layer light/dark runs.
+- A blocking `theme-contrast` job in `PR Check` (after `test-and-build`) that
+  installs Chromium, runs the harness and uploads the Playwright report on
+  failure; `publish-beta` now waits for it.
+- README section "Testing the theming contract" and a CONTRIBUTING entry for the
+  new local check. Planner's light `--color-text-muted` (4.41:1 on white, 4.01:1
+  on the derived raised panel) is documented as the one exempt pair with a 3.9
+  floor; raising that token is a Planner change.
+
+### Changed
+
+- `@playwright/test` is a devDependency and `vite` is an explicit devDependency
+  (it was already resolved through Nuxt) for the harness runner.
+- Test and CI only: no component API, service, composable or shipped-style
+  change, so the published file set and consumer behaviour are unchanged.
+
 ## [0.14.0] - 2026-11-25
 
 ### Added

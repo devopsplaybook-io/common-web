@@ -1,0 +1,32 @@
+/* Planner's dark palette, exactly as planner-web/assets/css/tokens.css defines
+   it, and nothing else: no --color-surface-raised, --color-error,
+   --color-on-warning, --space-base and no common-web tokens.css. */
+:root {
+  color-scheme: dark;
+
+  --color-primary: #4fb3e8;
+  --color-primary-hover: #74c4ee;
+  --color-on-primary: #06222f;
+
+  --color-text: #d7dee4;
+  --color-text-secondary: #b6c2cc;
+  --color-text-muted: #8a99a6;
+
+  --color-bg: #12191f;
+  --color-surface: #1b242c;
+  --color-surface-hover: #232e38;
+
+  --color-border: #2e3a44;
+  --color-border-strong: #43525e;
+
+  --color-success: #66bb6a;
+  --color-warning: #ffb74d;
+  --color-danger: #ef5350;
+
+  --space-md: 1em;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+}

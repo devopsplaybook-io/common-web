@@ -10,8 +10,14 @@ npm run lint
 npm run typecheck
 npm test
 npm run build
+npm run test:e2e
 npm audit --omit=dev --audit-level=high
 ```
+
+`npm run test:e2e` is the real-browser theme-contrast harness (Playwright,
+Chromium). Install the browser once with `npx playwright install chromium`; it
+needs `npm run build` first because the layer host is served from
+`playground/.output`. See "Testing the theming contract" in the README.
 
 The tests consume the generated npm tarball, not only the working tree.
 `npm run build` checks the publish file list and builds the Nuxt playground.
@@ -31,11 +37,16 @@ Three quality gates run with `npm test`:
 - **Accessibility**: `tests/accessibility.spec.ts` runs axe-core against every
   shipped component mounted in a real DOM tree and fails on violations. The
   `color-contrast` rule is disabled there because jsdom cannot compute rendered
-  contrast; WCAG AA color pairs are already gated by `tests/contrast.spec.ts`
-  against the packed tokens.
+  contrast.
 - **SSR**: `tests/ssr.spec.ts` renders the shipped components in a Node
   environment with `createSSRApp` and `renderToString`, so the SSR
   compatibility promised by the README is exercised on every test run.
+
+A fourth gate, `npm run test:e2e` (the blocking `theme-contrast` job in
+`PR Check`), renders the login-with-code components in Chromium across the layer
+and non-layer host modes and measures WCAG 2.2 AA contrast for their text and
+button colours. `tests/contrast.spec.ts` still gates the shipped token values
+themselves.
 
 ## Scope and compatibility
 

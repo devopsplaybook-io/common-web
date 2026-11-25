@@ -1,6 +1,6 @@
 {
   "name": "@devopsplaybook.io/common-web",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "description": "Shared Nuxt layer for DevOpsPlaybook web applications",
   "license": "ISC",
   "repository": {
@@ -39,17 +39,18 @@
   ],
   "scripts": {
     "dev": "nuxi dev playground",
-    "lint": "oxlint components composables services stores tests scripts playground vitest.config.ts nuxt.config.ts",
+    "lint": "oxlint components composables services stores tests scripts playground e2e vitest.config.ts nuxt.config.ts playwright.config.ts",
     "typecheck": "nuxi typecheck",
     "pretest": "nuxi prepare",
     "test": "node scripts/test-packed.mjs",
+    "test:e2e": "node scripts/test-e2e.mjs",
     "prebuild": "nuxi prepare",
     "build": "node scripts/build-package.mjs"
   },
   "peerDependencies": {
     "nuxt": "^4.0.0",
-    "vue": "^3.5.0",
-    "pinia": "^2.0.0 || ^3.0.0 || ^4.0.0"
+    "pinia": "^2.0.0 || ^3.0.0 || ^4.0.0",
+    "vue": "^3.5.0"
   },
   "peerDependenciesMeta": {
     "pinia": {
@@ -62,6 +63,7 @@
     "mitt": "^3.0.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "@types/node": "^26.6.6",
     "@vitejs/plugin-vue": "^6.0.11",
     "@vitest/coverage-v8": "^5.1.1",
@@ -73,6 +75,7 @@
     "pinia": "^4.1.0",
     "postcss": "^8.5.32",
     "typescript": "^6.0.3",
+    "vite": "^8.3.8",
     "vitest": "^5.1.1",
     "vue-tsc": "^3.3.14"
   },

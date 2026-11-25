@@ -1,0 +1,38 @@
+/* Deterministic harness styles. The host palette comes from the per-page
+   stylesheet; this file only removes rendering variables (fonts, animations,
+   caret) and lays the scenarios out. */
+html {
+  font-size: 16px;
+}
+
+body {
+  margin: 0;
+  font-family: "DejaVu Sans", sans-serif;
+}
+
+.theme-host {
+  padding: 1.5rem;
+}
+
+[data-scenario] {
+  max-width: 44rem;
+  margin: 0 auto 2rem;
+}
+
+[data-scenario] *,
+[data-scenario] *::before,
+[data-scenario] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+[data-scenario] code,
+[data-scenario] input,
+[data-scenario] .login-with-code-value,
+[data-scenario] .login-code-input-field {
+  font-family: "DejaVu Sans Mono", monospace !important;
+}
+
+[data-scenario] input {
+  caret-color: transparent;
+}
