@@ -29,6 +29,7 @@ required. The `playground/` directory demonstrates a consuming app.
 | `<AlertMessages />` | Accessible live regions displaying messages emitted on `EventBus`, each with a per-message **Dismiss** button. |
 | `<AppNavigation :links="links" :link-component="NuxtLink" label="Primary" />` | Navigation shell with a named `brand` slot, configurable links (`label`, `to`, optional `icon` and `active`) and an optional accessible `label`. |
 | `<OfflineBanner message="You are offline." />` | Announces offline status and accepts replacement content through its default slot. |
+| `<AppUpdateNotice :visible="updateAvailable" @reload="reload" @later="dismiss" />` | Accessible "new version available" prompt with **Reload**/**Later** buttons. Its polite `role="status"` live region stays mounted at all times; it is purely prop/emit driven, so it also works when driven by `@vite-pwa/nuxt`'s `$pwa.needRefresh`. |
 | `<LoginCodeInput v-model="code" :error="error" />` | Eight-character code entry: uppercases, strips spaces and hyphens, supports paste and Enter-to-submit, and exposes an accessible name that spells the code. |
 | `<LoginWithCodeCard :service="service" @approved="…" @use-password="…" @cancel="…" />` | Device-side flow: creates the request, shows and counts down the code, polls, and reports the redeemed session. |
 | `<AuthorizeDeviceCard :service="service" @approved="…" @cancel="…" />` | Approver-side flow: previews the requesting device and approves the code, with an optional password step-up. |
@@ -122,6 +123,18 @@ connectivity right after hydration. The default copy is the neutral
   `navigator.onLine` after mount and follows the `online`/`offline` events, so a
   page loaded offline shows the offline banner right after hydration without a
   hydration mismatch.
+- `useAppUpdate({ currentBuildId, fetchLatestBuildId, intervalMs?, beforeReload?, reload?, autoStart? })`
+  is the shared PWA update wrapper. It returns reactive `updateAvailable`,
+  `dismissed` and `latestBuildId` refs plus the `checkNow`, `start`, `stop`,
+  `reload` and `dismiss` actions. It checks on mount, on tab-visible, on
+  `online` and on `focus`, and every `intervalMs` (default 5 minutes) while the
+  tab is visible; `reload()` awaits `beforeReload()` first (throwing from it
+  vetoes the reload) and reloads exactly once. See "App update notice" below.
+- The update toolkit is also available as framework-agnostic services through
+  package deep imports: `BuildVersionProbe` (manifest probe with an
+  `/index.html` fallback), `AppUpdateService` (the scheduler behind the
+  composable) and `ServiceWorkerUpdate` (`acceptServiceWorkerUpdate`, which
+  posts `SKIP_WAITING`, waits for `controllerchange` and reloads once).
 - Services are available through package deep imports, for example
   `@devopsplaybook.io/common-web/services/AuthService`. `AuthService`,
   `PreferencesService` and `RefreshIntervalService` guard every `localStorage`
@@ -200,6 +213,65 @@ the interval and both listeners.
 The session model of each application (validity, absolute cap, renewal
 mechanism) is documented in the
 [common-utils auth session policy](https://github.com/devopsplaybook-io/common-utils/blob/main/docs/auth-session-policy.md).
+
+## App update notice
+
+The layer ships an opt-in, service-worker-agnostic toolkit for telling the user
+a new version is available and reloading safely. It detects changes through
+Nuxt's `/_nuxt/builds/latest.json` manifest (with an `/index.html` fallback),
+checks on load, tab-visible, `online` and `focus` plus a 5 minute interval (no
+polling in hidden tabs), shows an accessible prompt, and can activate a waiting
+service worker. Each application keeps its own service worker and caching: the
+toolkit assumes none.
+
+- `createBuildVersionProbe()` from
+  `@devopsplaybook.io/common-web/services/BuildVersionProbe` resolves the latest
+  build id. Pass `manifestUrl`/`fallbackShellUrl` when an app customizes
+  `baseURL` or `buildAssetsDir`.
+- `useAppUpdate()` schedules the checks and exposes the prompt state;
+  `AppUpdateNotice` renders it and is driven only by props and events.
+- `acceptServiceWorkerUpdate()` (from
+  `@devopsplaybook.io/common-web/services/ServiceWorkerUpdate`) activates a
+  waiting worker and reloads exactly once.
+
+```vue
+<script setup lang="ts">
+import { createBuildVersionProbe } from "@devopsplaybook.io/common-web/services/BuildVersionProbe";
+
+const config = useRuntimeConfig();
+const { updateAvailable, reload, dismiss } = useAppUpdate({
+  currentBuildId: String(config.app.buildId ?? ""),
+  fetchLatestBuildId: createBuildVersionProbe(),
+});
+</script>
+
+<template>
+  <AppUpdateNotice :visible="updateAvailable" @reload="reload" @later="dismiss" />
+</template>
+```
+
+Consumption has two modes:
+
+- **Nuxt layer host.** `useAppUpdate` and `<AppUpdateNotice>` are auto-imported;
+  import the services from their deep paths as above.
+- **Non-layer host** (plain Vue/Vite, or an app that does not extend the layer,
+  like Planner). Import the composable, component and services explicitly and
+  transpile the package with `build.transpile` /
+  `optimizeDeps.exclude` as shown in "Theming and non-layer hosts":
+
+  ```ts
+  import AppUpdateNotice from "@devopsplaybook.io/common-web/components/AppUpdateNotice.vue";
+  import { useAppUpdate } from "@devopsplaybook.io/common-web/composables/useAppUpdate";
+  import { createBuildVersionProbe } from "@devopsplaybook.io/common-web/services/BuildVersionProbe";
+  ```
+
+The portfolio standard — caching matrix, service-worker strategy selection, the
+update lifecycle, user-work protection and copy-paste integration recipes — is
+in [`docs/pwa-playbook.md`](docs/pwa-playbook.md):
+
+- (a) [custom service worker or no service worker](docs/pwa-playbook.md#a-custom-service-worker-or-no-service-worker);
+- (b) [custom service worker with a waiting worker](docs/pwa-playbook.md#b-custom-service-worker-with-a-waiting-worker);
+- (c) [`@vite-pwa/nuxt` with `registerType: "prompt"`](docs/pwa-playbook.md#c-vite-pwanuxt-with-registertype-prompt).
 
 ## Login with code
 
@@ -664,6 +736,10 @@ composables guard their browser-only access.
   offline page shows the banner right after hydration instead of in server
   HTML.
 - `useAppHeight()` touches `window` only inside `onMounted`.
+- `useAppUpdate()` registers its listeners and starts polling only in
+  `onMounted`; the server renders `updateAvailable: false` and schedules no
+  timers. `BuildVersionProbe` and `acceptServiceWorkerUpdate` guard their
+  browser access, so they are safe to import on the server.
 - `useLoginCode()` loads capabilities and starts polling only in `onMounted`, so
   the server renders `idle` (the card shows `Preparing a code…`); `LoginCodeService`
   touches no browser global and is safe to call from a server context.

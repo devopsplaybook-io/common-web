@@ -5,6 +5,40 @@ All notable changes to this project are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-11-25
+
+### Added
+
+- A shared, opt-in PWA app-update toolkit. Detection and prompting are shared;
+  each application keeps its own service worker and caching strategy, and the
+  toolkit never assumes a particular caching implementation.
+  - `BuildVersionProbe`: dependency-free `parseBuildManifest` / `parseShellBuildId`
+    parsers and `createBuildVersionProbe()`, which reads
+    `/_nuxt/builds/latest.json` (`cache: "no-store"`, abort timeout) and falls
+    back to `/index.html` only when the manifest is unavailable.
+  - `AppUpdateService`: framework-agnostic scheduler with a single in-flight
+    request, a hidden-tab pause, a 5 minute default interval, per-build dismissal
+    and an availability callback.
+  - `useAppUpdate()`: SSR-safe Vue wrapper that checks on load, tab-visible,
+    `online` and `focus`, pauses while hidden, and reloads exactly once after
+    awaiting a `beforeReload` hook (throwing from it vetoes the reload).
+  - `AppUpdateNotice`: presentational prompt driven only by props/events, so it
+    also works with `@vite-pwa/nuxt`'s `$pwa.needRefresh`. Keeps a polite
+    `role="status"` live region mounted at all times, is keyboard operable, uses
+    token CSS variables with fallbacks, and exposes stable `data-testid`s.
+  - `acceptServiceWorkerUpdate()`: posts `SKIP_WAITING`, waits for
+    `controllerchange`, then reloads exactly once, with a timeout fallback.
+- `docs/pwa-playbook.md`: the portfolio standard — caching matrix, service-worker
+  strategy selection, update lifecycle, user-work protection, three copy-paste
+  integration recipes and testing guidance.
+- README "App update notice" section and the new toolkit plus Vitest, SSR and
+  accessibility coverage.
+
+### Changed
+
+- The published file set now includes `docs/`.
+- No runtime dependency was added and no existing public API changed.
+
 ## [0.15.0] - 2026-11-25
 
 ### Added
