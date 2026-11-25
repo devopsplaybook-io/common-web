@@ -6,6 +6,7 @@ import AlertMessages from "@devopsplaybook.io/common-web/components/AlertMessage
 import AppNavigation from "@devopsplaybook.io/common-web/components/AppNavigation.vue";
 import Loading from "@devopsplaybook.io/common-web/components/Loading.vue";
 import OfflineBanner from "@devopsplaybook.io/common-web/components/OfflineBanner.vue";
+import AppUpdateNotice from "@devopsplaybook.io/common-web/components/AppUpdateNotice.vue";
 import {
   EventBus,
   EventTypes,
@@ -273,6 +274,22 @@ describe("accessibility of the shipped components (axe)", () => {
     );
     await nextTick();
     expect(wrapper.text()).toContain("Showing cached content.");
+    await expectNoAxeViolations();
+  });
+
+  it("keeps the hidden app update notice accessible", async () => {
+    const wrapper = mountUnderMain(AppUpdateNotice);
+    const region = wrapper.get('[data-testid="app-update-notice"]');
+    expect(region.attributes("role")).toBe("status");
+    expect(region.attributes("aria-live")).toBe("polite");
+    expect(wrapper.findAll("button")).toHaveLength(0);
+    await expectNoAxeViolations();
+  });
+
+  it("keeps the visible app update notice accessible", async () => {
+    const wrapper = mountUnderMain(AppUpdateNotice, { visible: true });
+    expect(wrapper.text()).toContain("New version available.");
+    expect(wrapper.findAll("button")).toHaveLength(2);
     await expectNoAxeViolations();
   });
 

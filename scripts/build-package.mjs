@@ -30,6 +30,7 @@ try {
     "nuxt.config.ts",
     "assets/css/tokens.css",
     "assets/css/app-shell.css",
+    "docs/pwa-playbook.md",
     "README.md",
     "CHANGELOG.md",
     "CONTRIBUTING.md",
