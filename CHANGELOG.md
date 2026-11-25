@@ -5,6 +5,28 @@ All notable changes to this project are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-11-25
+
+### Added
+
+- `LoginCodeService`, a client for the cross-device login-with-code protocol of
+  `@devopsplaybook.io/common-utils` 2.12.0: typed `capabilities`, `create`,
+  `poll`, `preview`, `approve` and `cancel` methods, an injectable HTTP client,
+  `AbortSignal` support, a configurable base URL and a typed `LoginCodeError`
+  with stable backend codes plus transport and parsing codes.
+- `useLoginCode()`: the device-side state machine with server-clock countdowns,
+  recursive polling with exponential backoff, pause/resume on visibility and
+  focus, abortable requests, session capture and terminal states.
+- `LoginCodeInput`, `LoginWithCodeCard` and `AuthorizeDeviceCard`: accessible
+  code entry, the requesting-device flow and the approver flow with an optional
+  password step-up, all localisable through `labels` props.
+- A playground page plus component, service, composable, SSR, accessibility and
+  no-Nuxt-import tests.
+
+Everything is additive: no existing export, prop or behaviour changed, and no
+dependency was added or upgraded (the service reuses the existing axios
+dependency).
+
 ## [0.13.0] - 2026-11-25
 
 ### Added

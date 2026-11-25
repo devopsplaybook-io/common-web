@@ -17,6 +17,9 @@
 import { resolveComponent } from "vue";
 
 const NuxtLink = resolveComponent("NuxtLink");
-const links = [{ label: "Home", to: "/" }];
+const links = [
+  { label: "Home", to: "/" },
+  { label: "Login with code", to: "/login-with-code" },
+];
 useAppHeight();
 </script>
