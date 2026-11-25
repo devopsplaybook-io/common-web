@@ -5,6 +5,20 @@ All notable changes to this project are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-11-25
+
+### Added
+
+- `AuthService.startSessionRenewal()`: the standard client renewal loop. It
+  checks the token immediately, on a visible `visibilitychange`, on `focus` and
+  every five minutes, and renews when 20 % or less of the lifetime remains
+  (the existing `getToken()` behaviour). It is opt-in, idempotent, SSR-safe and
+  returns a stop function that clears the interval and listeners.
+- `SESSION_RENEWAL_CHECK_INTERVAL_MS` (five minutes) and an optional
+  `intervalMs` override.
+- Tests for the start, visibility, focus, interval, stop, double-start,
+  double-stop and SSR paths; README documentation of the client-plugin snippet.
+
 ## [0.12.0] - 2026-11-01
 
 ### Added
