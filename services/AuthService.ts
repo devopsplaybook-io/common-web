@@ -9,6 +9,9 @@ import Config from "./Config";
 import { Timeout } from "./Timeout";
 
 export const AUTH_TOKEN_KEY = "auth_token";
+
+/** Default polling cadence of {@link AuthService.startSessionRenewal}. */
+export const SESSION_RENEWAL_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 const LEGACY_TOKEN_KEYS = ["AUTH_TOKEN", "AUTH_TOKEN_KEY"] as const;
 
 const RENEWAL_TIMEOUT_MS = 3_000;
@@ -52,6 +55,63 @@ export class AuthService {
     | null = null;
 
   private static renewalFailure: { token: string; at: number } | null = null;
+
+  private static sessionRenewalStop: (() => void) | null = null;
+
+  /**
+   * Start the standard client session renewal loop.
+   *
+   * Checks the token immediately, on `visibilitychange` while the document is
+   * visible, on `focus`, and every `intervalMs` (default 5 minutes). Each check
+   * delegates to {@link getToken}, which renews when 20 % or less of the token
+   * lifetime remains, so a continuously visible idle tab still renews before
+   * expiry.
+   *
+   * Opt-in: never started on import or through an auto-registered plugin.
+   * Idempotent: a second call returns the existing stop function. Safe during
+   * SSR (no-op). Returns a stop function that clears the interval and both
+   * listeners; calling it twice is safe.
+   */
+  static startSessionRenewal(options?: { intervalMs?: number }): () => void {
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      return () => {};
+    }
+    if (AuthService.sessionRenewalStop) {
+      return AuthService.sessionRenewalStop;
+    }
+
+    const requestedInterval = options?.intervalMs;
+    const intervalMs =
+      typeof requestedInterval === "number" &&
+      Number.isFinite(requestedInterval) &&
+      requestedInterval > 0
+        ? requestedInterval
+        : SESSION_RENEWAL_CHECK_INTERVAL_MS;
+
+    const check = (): void => {
+      void AuthService.getToken().catch(() => {});
+    };
+    const onVisibilityChange = (): void => {
+      if (document.visibilityState === "visible") check();
+    };
+    const onFocus = (): void => check();
+
+    const interval = setInterval(check, intervalMs);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("focus", onFocus);
+
+    const stop = (): void => {
+      if (AuthService.sessionRenewalStop !== stop) return;
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("focus", onFocus);
+      AuthService.sessionRenewalStop = null;
+    };
+    AuthService.sessionRenewalStop = stop;
+
+    check();
+    return stop;
+  }
 
   static async isAuthenticated(): Promise<boolean> {
     return Boolean(await AuthService.getToken());

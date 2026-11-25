@@ -166,6 +166,38 @@ endpoint never stalls a caller.
 compare-and-remove operation: it clears the session only when the stored token
 still equals `token`, so a stale response cannot discard a newer session.
 
+### Standard client renewal: `startSessionRenewal()`
+
+`AuthService.startSessionRenewal()` is the standard mechanism for every Nuxt
+application. `getToken()` alone only renews when it is called again (for
+example on a data access), so a tab that stays visible and idle can reach
+expiry without ever renewing. The helper closes that gap:
+
+```ts
+// plugins/auth-renewal.client.ts
+import { AuthService } from "@devopsplaybook.io/common-web/services/AuthService";
+
+export default defineNuxtPlugin(() => {
+  AuthService.startSessionRenewal();
+});
+```
+
+It checks the token immediately, on `visibilitychange` while the document is
+visible, on `focus`, and every five minutes (`SESSION_RENEWAL_CHECK_INTERVAL_MS`;
+override with `startSessionRenewal({ intervalMs })`). Each check delegates to
+`getToken()`, which renews through `POST /api/users/session/refresh` when 20 %
+or less of the lifetime remains. The threshold must stay below the token
+lifetime, otherwise it can never fire.
+
+The helper is opt-in (nothing auto-starts it, and the layer registers no auth
+plugin), idempotent (a second call returns the same stop function), safe to
+call twice for stopping, and a no-op during SSR. The returned function clears
+the interval and both listeners.
+
+The session model of each application (validity, absolute cap, renewal
+mechanism) is documented in the
+[common-utils auth session policy](https://github.com/devopsplaybook-io/common-utils/blob/main/docs/auth-session-policy.md).
+
 ## Authentication state and HTTP integration
 
 `AuthService.saveToken()` and `removeToken()` emit
