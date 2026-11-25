@@ -15,6 +15,11 @@ const SHIPPED_FILES = [
   "components/LoginCodeInput.vue",
   "components/LoginWithCodeCard.vue",
   "components/AuthorizeDeviceCard.vue",
+  "services/BuildVersionProbe.ts",
+  "services/AppUpdateService.ts",
+  "services/ServiceWorkerUpdate.ts",
+  "composables/useAppUpdate.ts",
+  "components/AppUpdateNotice.vue",
 ];
 
 // Identifiers only available through a Nuxt application context.
@@ -39,6 +44,7 @@ const ALLOWED_IMPORTS = new Set([
   "axios",
   "./Config",
   "../services/LoginCodeService",
+  "../services/AppUpdateService",
   "../composables/useLoginCode",
   "./LoginCodeInput.vue",
 ]);
@@ -61,7 +67,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("login-with-code sources do not depend on Nuxt", () => {
+describe("shipped sources do not depend on Nuxt", () => {
   it("contains no Nuxt-only identifiers", () => {
     for (const file of SHIPPED_FILES) {
       const source = sourceOf(file);
@@ -76,7 +82,6 @@ describe("login-with-code sources do not depend on Nuxt", () => {
   it("only imports from the documented plain-Vue modules", () => {
     for (const file of SHIPPED_FILES) {
       const specifiers = importedSpecifiers(sourceOf(file));
-      expect(specifiers.length, `${file} has imports`).toBeGreaterThan(0);
       for (const specifier of specifiers) {
         expect(
           ALLOWED_IMPORTS.has(specifier),

@@ -10,7 +10,9 @@ import OfflineBanner from "@devopsplaybook.io/common-web/components/OfflineBanne
 import LoginCodeInput from "@devopsplaybook.io/common-web/components/LoginCodeInput.vue";
 import LoginWithCodeCard from "@devopsplaybook.io/common-web/components/LoginWithCodeCard.vue";
 import AuthorizeDeviceCard from "@devopsplaybook.io/common-web/components/AuthorizeDeviceCard.vue";
+import AppUpdateNotice from "@devopsplaybook.io/common-web/components/AppUpdateNotice.vue";
 import { useLoginCode } from "@devopsplaybook.io/common-web/composables/useLoginCode";
+import { useAppUpdate } from "@devopsplaybook.io/common-web/composables/useAppUpdate";
 import {
   LoginCodeService,
   type LoginCodeHttpClient,
@@ -67,6 +69,45 @@ describe("SSR rendering", () => {
 
     expect(html).toContain("offline-banner-hidden");
     expect(html).not.toContain("You are offline.");
+  });
+
+  it("server-renders the app update notice hidden", async () => {
+    const html = await renderToString(createSSRApp(AppUpdateNotice));
+
+    expect(html).toContain('data-testid="app-update-notice"');
+    expect(html).toContain("app-update-notice-hidden");
+    expect(html).not.toContain("New version available.");
+  });
+
+  it("server-renders the app update notice when visible", async () => {
+    const html = await renderToString(
+      createSSRApp({
+        render: () => h(AppUpdateNotice, { visible: true }),
+      }),
+    );
+
+    expect(html).toContain("New version available.");
+    expect(html).toContain("Reload");
+    expect(html).toContain("Later");
+    expect(html).toContain('type="button"');
+  });
+
+  it("renders useAppUpdate unavailable on the server", async () => {
+    const fetchLatest = vi.fn();
+    const Probe = defineComponent({
+      setup() {
+        const { updateAvailable } = useAppUpdate({
+          currentBuildId: "build-1",
+          fetchLatestBuildId: fetchLatest,
+        });
+        return () => h("span", String(updateAvailable.value));
+      },
+    });
+
+    const html = await renderToString(createSSRApp(Probe));
+
+    expect(html).toContain("false");
+    expect(fetchLatest).not.toHaveBeenCalled();
   });
 
   it("renders the login-code components on the server", async () => {
