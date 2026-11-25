@@ -29,6 +29,9 @@ required. The `playground/` directory demonstrates a consuming app.
 | `<AlertMessages />` | Accessible live regions displaying messages emitted on `EventBus`, each with a per-message **Dismiss** button. |
 | `<AppNavigation :links="links" :link-component="NuxtLink" label="Primary" />` | Navigation shell with a named `brand` slot, configurable links (`label`, `to`, optional `icon` and `active`) and an optional accessible `label`. |
 | `<OfflineBanner message="You are offline." />` | Announces offline status and accepts replacement content through its default slot. |
+| `<LoginCodeInput v-model="code" :error="error" />` | Eight-character code entry: uppercases, strips spaces and hyphens, supports paste and Enter-to-submit, and exposes an accessible name that spells the code. |
+| `<LoginWithCodeCard :service="service" @approved="…" @use-password="…" @cancel="…" />` | Device-side flow: creates the request, shows and counts down the code, polls, and reports the redeemed session. |
+| `<AuthorizeDeviceCard :service="service" @approved="…" @cancel="…" />` | Approver-side flow: previews the requesting device and approves the code, with an optional password step-up. |
 
 `AlertMessages` listens for `EventTypes.ALERT_MESSAGE` events. Its payload is
 `{ text, type?, durationMs? }` with `type` limited to `info`, `success`,
@@ -198,6 +201,276 @@ The session model of each application (validity, absolute cap, renewal
 mechanism) is documented in the
 [common-utils auth session policy](https://github.com/devopsplaybook-io/common-utils/blob/main/docs/auth-session-policy.md).
 
+## Login with code
+
+The layer ships a client for the cross-device "login with a code" protocol of
+`@devopsplaybook.io/common-utils` 2.12.0, documented in
+[`docs/login-with-code.md`](https://github.com/devopsplaybook-io/common-utils/blob/main/docs/login-with-code.md).
+A device without usable credentials creates a short-lived request and shows an
+8 character code; a device where the user is already signed in previews and
+approves it; the first device redeems the approval for a session. This package
+is the client and UI only: the routes, store and session issuance live in the
+backend, and are disabled there unless `LOGIN_CODE_ENABLED=true`.
+
+### `LoginCodeService`
+
+`LoginCodeService` is plain ESM TypeScript with no Nuxt imports and no browser
+globals, so it also runs during SSR.
+
+```ts
+import {
+  LoginCodeError,
+  LoginCodeService,
+} from "@devopsplaybook.io/common-web/services/LoginCodeService";
+
+const service = new LoginCodeService({
+  // Optional: defaults to `${Config.SERVER_URL}/users/login-codes`.
+  baseUrl: "/api/users/login-codes",
+  // Optional: bearer header provider for preview/approve (the approver only).
+  getAuthHeader: () => AuthService.getAuthHeader(),
+  // Optional: persist the redeemed session (returned by approved polls).
+  onSession: (token, user) => AuthService.saveToken(token),
+});
+
+const capabilities = await service.capabilities();
+if (capabilities.available) {
+  const request = await service.create(); // { requestToken, code, … }
+  const poll = await service.poll(request.requestToken); // pending | approved | …
+}
+```
+
+| Method | Request |
+| --- | --- |
+| `capabilities({ signal? })` | `GET <prefix>/capabilities` |
+| `create({ signal? })` | `POST <prefix>/` (the trailing slash is added) |
+| `poll(requestToken, { refreshCode?, signal? })` | `POST <prefix>/poll` |
+| `preview(code, { signal? })` | `POST <prefix>/preview`, authenticated |
+| `approve({ code, password? }, { signal? })` | `POST <prefix>/approve`, authenticated |
+| `cancel(requestToken, { signal? })` | `POST <prefix>/cancel` |
+
+Every method accepts an `AbortSignal` and resolves with the parsed response body;
+requests time out after 10 seconds by default (`timeoutMs` option). Failures
+throw `LoginCodeError` with a stable `code`, an optional HTTP `status` and a
+`retryable` flag. The backend codes are `INVALID_CODE`, `ALREADY_USED`,
+`RATE_LIMITED`, `LOGIN_CODE_UNAVAILABLE`, `PASSWORD_REQUIRED`,
+`UNAUTHENTICATED` and `FORBIDDEN`; transport and parsing failures map to
+`NETWORK`, `TIMEOUT`, `ABORTED`, `HTTP_ERROR`, `INVALID_RESPONSE` or `FAILED`.
+Messages are fixed and never include a code, a request token or a response body,
+so they are safe to log. `getAuthHeader` may return a header map or `{ headers }`
+and may be async; if it throws, the call fails with `UNAUTHENTICATED` rather than
+sending an unauthenticated approval. A rejected `onSession` does not turn a
+successful redemption into an error.
+
+### `useLoginCode()`
+
+`useLoginCode({ service?, onSession? })` owns the device-side state machine and
+is safe during SSR (it touches browser APIs only in `onMounted`). It exposes:
+
+- `status`: `idle`, `creating`, `waiting`, `approved`, `expired`, `cancelled` or
+  `error`; `code`, `formattedCode` (grouped as `BCDF-GHJK`), `error`,
+  `capabilities`, `enabled`, `available`, `session` and `user`;
+- `secondsUntilRefresh` and `secondsUntilExpiry`, countdowns computed against the
+  server clock (the offset is derived from each response's `serverTime`, never
+  from the local clock alone);
+- `start()`, `cancel()` and `retry()`.
+
+`start()` loads the capabilities and, when available, creates one request and
+polls every `pollIntervalMs` (2 seconds by default). While the page is hidden
+polling pauses and in-flight requests are aborted; it resumes immediately on
+`visibilitychange` or `focus`. Poll failures back off exponentially (up to 30
+seconds) and stop after 5 consecutive failures. A rotation that returns a new
+code replaces the displayed one; otherwise no code is exposed again. `approved`
+stores the session and calls `onSession`; `expired`, `cancelled` and `failed`
+are terminal, as is `error`. `cancel()` is best-effort and a no-op outside
+`creating`/`waiting`. Unmounting aborts requests, clears timers and invalidates
+pending continuations.
+
+### Components
+
+`<LoginCodeInput v-model="code" label="Login code" :error="error" :length="8" />`
+renders a visible label, normalises input to the documented alphabet (uppercase,
+spaces and hyphens stripped), prevents paste from doubling characters and emits
+`submit` on Enter when complete. Its accessible name spells the characters
+(`Login code: B C D F G H J K`), and an `error` renders a `role="alert"` message
+linked by `aria-describedby`.
+
+`<LoginWithCodeCard>` shows the created code with copy, refresh and expiry
+countdowns, a polite live status region and Cancel / Use password instead /
+Try again actions. Try again appears after an error, expiry or cancellation and
+starts a fresh request. Props: `service`, `autoStart` (default `true`), `onSession`
+and `labels` (a `Partial` of the English defaults: `title`, `instructions`,
+`codeLabel`, `preparing`, `waiting`, `approved`, `expired`, `cancelled`, `error`,
+`unavailable`, `refreshIn` / `expiresIn` (`{seconds}` placeholder), `copy`,
+`copied`, `cancel`, `usePassword`, `retry`). Events: `approved` with
+`{ token, user }` (emitted after `onSession` settles), `cancel` and
+`use-password`, so the host can switch to its password form.
+
+`<AuthorizeDeviceCard>` previews the requesting device label, raw user agent,
+request and expiry times and the approving account before approval, and requires
+a password only when the capabilities say so. Props: `service` and `labels`
+(`title`, `warning`, `codeLabel`, `preview`, `approve`, `cancel`, `password`,
+`willSignInAs`, `deviceLabel`, `userAgentLabel`, `requestedAt`, `expiresAt`,
+`approved`, `unavailable`, `preparing`, `invalidCode`, `alreadyUsed`,
+`rateLimited`, `passwordRequired`, `unauthenticated`, `forbidden`, `network`,
+`generic`). Events: `approved` with the approval body and `cancel`. Error copy
+is local and generic; the server message is never rendered. Both cards render a
+live region only for status changes, and `AuthorizeDeviceCard` keeps the warning
+visible in every state.
+
+Both cards accept `variant` (`"card"` by default, or `"plain"` to drop their own
+border, radius, background, shadow and outer padding when they are embedded in a
+host card or section) and `headingLevel` (`2`, `3` or `4`, default `2`) so the
+title matches the surrounding heading structure. The `aria-labelledby` wiring
+follows the rendered heading id.
+
+### Using the layer
+
+With the layer extended, the components and composable are auto-imported:
+
+```vue
+<script setup lang="ts">
+import { AuthService } from "@devopsplaybook.io/common-web/services/AuthService";
+import { LoginCodeService } from "@devopsplaybook.io/common-web/services/LoginCodeService";
+
+const service = new LoginCodeService({
+  getAuthHeader: () => AuthService.getAuthHeader(),
+});
+
+function signedIn({ token }: { token: string }) {
+  AuthService.saveToken(token);
+  AuthService.startSessionRenewal();
+}
+</script>
+
+<template>
+  <LoginWithCodeCard :service="service" @approved="signedIn" @use-password="showPassword = true" />
+</template>
+```
+
+Approving must happen on a device with an interactive session; a backend API
+token cannot approve (`403 FORBIDDEN`). Always pass a token provider for the
+approver (`getAuthHeader`), and treat `409 ALREADY_USED`, `expired`, `cancelled`
+and `failed` as "start a new request".
+
+Outside a Nuxt layer (plain Vue/Vite or a non-extending app), import the files
+explicitly and transpile the package:
+
+```ts
+// vite.config.ts / nuxt.config.ts
+export default defineConfig({
+  build: { transpile: ["@devopsplaybook.io/common-web"] },
+  vite: {
+    optimizeDeps: { exclude: ["@devopsplaybook.io/common-web"] },
+  },
+});
+```
+
+```vue
+<script setup lang="ts">
+import LoginWithCodeCard from "@devopsplaybook.io/common-web/components/LoginWithCodeCard.vue";
+import LoginCodeInput from "@devopsplaybook.io/common-web/components/LoginCodeInput.vue";
+import AuthorizeDeviceCard from "@devopsplaybook.io/common-web/components/AuthorizeDeviceCard.vue";
+import { useLoginCode } from "@devopsplaybook.io/common-web/composables/useLoginCode";
+import { LoginCodeService } from "@devopsplaybook.io/common-web/services/LoginCodeService";
+</script>
+```
+
+The shipped files import only `vue`, `axios`, `./Config`, the login-code service
+and each other; a regression test fails if Nuxt auto-imports (`#imports`,
+`useRuntimeConfig`, `navigateTo`, …) creep in. The feature adds no runtime
+dependency: the service reuses the package's existing axios dependency (the
+theme-contract test adds `postcss` as a dev-only dependency).
+
+### Theming and non-layer hosts
+
+`LoginCodeInput`, `LoginWithCodeCard` and `AuthorizeDeviceCard` theme themselves
+from the host application's tokens, so they work in the Nuxt layer (which ships
+`assets/css/tokens.css`) and when the SFCs are imported directly into a plain
+Vue/Nuxt app that defines only a partial palette. Every component root carries
+the `lc-theme` class and maps the host tokens onto internal `--lc-*` variables.
+
+No token is strictly required: each has a fallback. For a faithful theme, define:
+
+| Token | Use |
+| --- | --- |
+| `--color-surface` | card and input background |
+| `--color-text` | body, code, labels and button text |
+| `--color-text-muted` | instructions, countdowns and secondary labels |
+| `--color-border` | card, input and secondary-button borders |
+| `--color-primary`, `--color-primary-hover` | primary buttons, links, focus rings |
+| `--color-on-primary` | primary-button label |
+| `--color-warning` | warning callout accent (used as a tint, not a fill) |
+| `--color-error` **or** `--color-danger` | error text and the invalid input border |
+| `--color-success` | approval confirmation |
+
+Optional: `--color-surface-raised` (otherwise derived with `color-mix()` as 5 %
+of the text colour over the surface, tinted with the host palette) and either
+`--space-base` or `--space-md` (plus `--space-xs/sm/lg/xl` when present). Host
+tokens always win; the fallbacks only fill the gaps.
+
+Warning and error states are callouts — text in `--lc-text` on a tinted (or
+transparent) background with an accent border — so hosts do not need
+`--color-on-warning` or `--color-on-error` for these components.
+
+The `light-dark()` fallbacks used by token-less hosts follow the inherited CSS
+`color-scheme`. The layer and Planner set it; a token-less host should too:
+
+```css
+:root {
+  color-scheme: light dark;
+}
+```
+
+Browsers without `light-dark()` or `color-mix()` fall back to the light palette
+and a transparent warning callout with a solid accent border. Text contrast
+follows the host tokens: with a faithful palette the components meet WCAG 2.2 AA
+in light and dark. Secondary text is bounded by `--color-text-muted`, so a muted
+token that is too light (for example a grey below 4.5:1 on the surface) caps the
+contrast the library can offer.
+
+Override individual values through the `--lc-*` variables on the component or any
+ancestor without redefining the whole host palette:
+
+```css
+.lc-theme {
+  --lc-space-sm: var(--space-sm, 0.5rem);
+  --lc-space: var(--space-base, var(--space-md, 1rem));
+  --lc-space-lg: var(--space-lg, 1.5rem);
+  --lc-space-xl: var(--space-xl, 2rem);
+
+  --lc-surface: var(--color-surface, #fff);
+  --lc-raised: var(--color-surface-raised, #f5f5f5);
+  --lc-text: var(--color-text, #171717);
+  --lc-muted: var(--color-text-muted, #5f6368);
+  --lc-border: var(--color-border, #d6d6d6);
+  --lc-primary: var(--color-primary, #c62828);
+  --lc-primary-hover: var(--color-primary-hover, #a61f1f);
+  --lc-on-primary: var(--color-on-primary, #fff);
+  --lc-warning: var(--color-warning, #8a5a00);
+  --lc-danger: var(--color-error, var(--color-danger, #b3261e));
+  --lc-success: var(--color-success, #2e7d32);
+}
+```
+
+Embed the cards in an existing card or section with `variant="plain"` (no border,
+radius, background, shadow or outer padding) and match the heading structure with
+`headingLevel`:
+
+```vue
+<article class="login-card">
+  <LoginWithCodeCard
+    :service="service"
+    variant="plain"
+    :heading-level="3"
+    @approved="signedIn"
+  />
+</article>
+```
+
+`tests/theme-contract.spec.ts` guards the contract: no raw colour literals in
+colour declarations, only documented host tokens, `--color-on-primary` shipped in
+every theme block, and the spacing bridge through `--lc-space`.
+
 ## Authentication state and HTTP integration
 
 `AuthService.saveToken()` and `removeToken()` emit
@@ -298,6 +571,9 @@ composables guard their browser-only access.
   offline page shows the banner right after hydration instead of in server
   HTML.
 - `useAppHeight()` touches `window` only inside `onMounted`.
+- `useLoginCode()` loads capabilities and starts polling only in `onMounted`, so
+  the server renders `idle` (the card shows `Preparing a code…`); `LoginCodeService`
+  touches no browser global and is safe to call from a server context.
 - `AuthService`, `PreferencesService` and `RefreshIntervalService` guard every
   `localStorage` access: during SSR reads return their documented fallback and
   writes are no-ops.
@@ -315,17 +591,19 @@ exercised by `npm test` and by both CI workflows.
 
 The layer loads `assets/css/tokens.css` and `assets/css/app-shell.css`.
 Tokens include `--color-*` (including the per-status foreground tokens
-`--color-on-success`, `--color-on-error` and `--color-on-warning` used with
-`--color-success`, `--color-error` and `--color-warning`),
+`--color-on-primary`, `--color-on-success`, `--color-on-error` and
+`--color-on-warning` used with `--color-primary`, `--color-success`,
+`--color-error` and `--color-warning`),
 `--space-*`, `--text-*`, `--radius-*`, `--shadow-*`, `--header-height`, and
 `--app-height`. Dark mode can be selected with `data-theme="dark"` or comes
 from `prefers-color-scheme` when no explicit light preference is set. Status
 colors meet WCAG AA against their `--color-on-*` foreground tokens in both
 themes. `--color-primary` and `--color-primary-hover` are defined in both
 themes and meet AA (4.5:1) on the shipped `--color-surface` and
-`--color-surface-raised` backgrounds. `tests/contrast.spec.ts` gates text,
-muted text, primary, primary hover and the status color pairs in the light and
-both dark blocks. The `dpb-fade-in` and `dpb-blink` helper classes are disabled
+`--color-surface-raised` backgrounds, and `--color-on-primary` meets AA on
+`--color-primary`. `tests/contrast.spec.ts` gates text,
+muted text, primary, primary hover, the primary label and the status color pairs
+in the light and both dark blocks. The `dpb-fade-in` and `dpb-blink` helper classes are disabled
 under `prefers-reduced-motion: reduce`.
 
 Load app-specific CSS after the layer and redefine only the values you need:

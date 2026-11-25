@@ -82,6 +82,7 @@ function expectAaCompliant(theme: TokenValues, label: string): void {
   }
 
   const pairs: Array<[string, string, string]> = [
+    ["primary", requireToken(theme, "color-on-primary", label), requireToken(theme, "color-primary", label)],
     ["success", requireToken(theme, "color-on-success", label), requireToken(theme, "color-success", label)],
     ["error", requireToken(theme, "color-on-error", label), requireToken(theme, "color-error", label)],
     ["warning", requireToken(theme, "color-on-warning", label), requireToken(theme, "color-warning", label)],

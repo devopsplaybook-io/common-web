@@ -7,6 +7,15 @@ import AlertMessages from "@devopsplaybook.io/common-web/components/AlertMessage
 import AppNavigation from "@devopsplaybook.io/common-web/components/AppNavigation.vue";
 import Loading from "@devopsplaybook.io/common-web/components/Loading.vue";
 import OfflineBanner from "@devopsplaybook.io/common-web/components/OfflineBanner.vue";
+import LoginCodeInput from "@devopsplaybook.io/common-web/components/LoginCodeInput.vue";
+import LoginWithCodeCard from "@devopsplaybook.io/common-web/components/LoginWithCodeCard.vue";
+import AuthorizeDeviceCard from "@devopsplaybook.io/common-web/components/AuthorizeDeviceCard.vue";
+import { useLoginCode } from "@devopsplaybook.io/common-web/composables/useLoginCode";
+import {
+  LoginCodeService,
+  type LoginCodeHttpClient,
+  type LoginCodeService as LoginCodeServiceType,
+} from "@devopsplaybook.io/common-web/services/LoginCodeService";
 import {
   THEME_INIT_SCRIPT,
   THEME_SCRIPT_KEY,
@@ -58,6 +67,78 @@ describe("SSR rendering", () => {
 
     expect(html).toContain("offline-banner-hidden");
     expect(html).not.toContain("You are offline.");
+  });
+
+  it("renders the login-code components on the server", async () => {
+    const app = createSSRApp({
+      render: () =>
+        h("main", [
+          h(LoginCodeInput, { modelValue: "BCDFGHJK" }),
+          h(LoginWithCodeCard),
+          h(AuthorizeDeviceCard),
+        ]),
+    });
+
+    const html = await renderToString(app);
+
+    expect(html).toContain("Login code: B C D F G H J K");
+    expect(html).toContain("Sign in with a code");
+    expect(html).toContain("Approve a sign-in");
+    expect(html).toContain("Checking availability…");
+    expect(html).toContain('role="status"');
+  });
+
+  it("renders useLoginCode idle on the server without calling the service", async () => {
+    const service = {
+      capabilities: vi.fn(),
+      create: vi.fn(),
+      poll: vi.fn(),
+      cancel: vi.fn(),
+    };
+    const Probe = defineComponent({
+      setup() {
+        const { status } = useLoginCode({
+          service: service as unknown as LoginCodeServiceType,
+        });
+        return () => h("span", status.value);
+      },
+    });
+
+    const html = await renderToString(createSSRApp(Probe));
+
+    expect(html).toContain("idle");
+    expect(service.capabilities).not.toHaveBeenCalled();
+    expect(service.create).not.toHaveBeenCalled();
+    expect(service.poll).not.toHaveBeenCalled();
+  });
+
+  it("loads login-code capabilities through an injected HTTP client", async () => {
+    const get = vi.fn().mockResolvedValue({
+      data: {
+        enabled: true,
+        available: true,
+        codeLength: 8,
+        rotationSeconds: 30,
+        graceSeconds: 60,
+        ttlSeconds: 300,
+        pollIntervalMs: 2000,
+        approveRequiresPassword: false,
+        serverTime: "2026-11-25T12:00:00.000Z",
+      },
+    });
+    const http: LoginCodeHttpClient = { get, post: vi.fn() };
+    const service = new LoginCodeService({
+      baseUrl: "https://auth.example.test/login-codes",
+      http,
+    });
+
+    const capabilities = await service.capabilities();
+
+    expect(capabilities.codeLength).toBe(8);
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(get.mock.calls[0]?.[0]).toBe(
+      "https://auth.example.test/login-codes/capabilities",
+    );
   });
 
   it("renders useTheme with the default system preference", async () => {

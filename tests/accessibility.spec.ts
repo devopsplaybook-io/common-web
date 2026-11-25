@@ -11,6 +11,13 @@ import {
   EventTypes,
   type AlertMessage,
 } from "@devopsplaybook.io/common-web/composables/EventBus";
+import LoginCodeInput from "@devopsplaybook.io/common-web/components/LoginCodeInput.vue";
+import LoginWithCodeCard from "@devopsplaybook.io/common-web/components/LoginWithCodeCard.vue";
+import AuthorizeDeviceCard from "@devopsplaybook.io/common-web/components/AuthorizeDeviceCard.vue";
+import type {
+  LoginCodeCapabilities,
+  LoginCodeService,
+} from "@devopsplaybook.io/common-web/services/LoginCodeService";
 
 const wrappers: Array<{ unmount: () => void }> = [];
 
@@ -42,6 +49,85 @@ async function expectNoAxeViolations(): Promise<void> {
         .join(", ")}`,
   );
   expect(violations).toEqual([]);
+}
+
+const SERVER_TIME = "2026-11-25T12:00:00.000Z";
+
+function loginCodeCapabilities(
+  overrides: Partial<LoginCodeCapabilities> = {},
+): LoginCodeCapabilities {
+  return {
+    enabled: true,
+    available: true,
+    codeLength: 8,
+    rotationSeconds: 30,
+    graceSeconds: 60,
+    ttlSeconds: 300,
+    pollIntervalMs: 60_000,
+    approveRequiresPassword: false,
+    serverTime: SERVER_TIME,
+    ...overrides,
+  };
+}
+
+function asService(service: object): LoginCodeService {
+  return service as unknown as LoginCodeService;
+}
+
+function waitingDeviceService(): LoginCodeService {
+  return asService({
+    capabilities: () => Promise.resolve(loginCodeCapabilities()),
+    create: () =>
+      Promise.resolve({
+        requestToken: "request-token",
+        code: "BCDFGHJK",
+        codeExpiresAt: "2026-11-25T12:00:30.000Z",
+        expiresAt: "2026-11-25T12:05:00.000Z",
+        serverTime: SERVER_TIME,
+      }),
+    poll: () => new Promise(() => {}),
+    cancel: () =>
+      Promise.resolve({ status: "cancelled", serverTime: SERVER_TIME }),
+  });
+}
+
+function unusableDeviceService(): LoginCodeService {
+  return asService({
+    capabilities: () =>
+      Promise.resolve(loginCodeCapabilities({ enabled: false })),
+    create: () => Promise.reject(new Error("disabled")),
+    poll: () => new Promise(() => {}),
+    cancel: () => Promise.resolve({ status: "cancelled", serverTime: SERVER_TIME }),
+  });
+}
+
+function previewService(requiresPassword: boolean): LoginCodeService {
+  return asService({
+    capabilities: () =>
+      Promise.resolve(
+        loginCodeCapabilities({ approveRequiresPassword: requiresPassword }),
+      ),
+    preview: () =>
+      Promise.resolve({
+        deviceLabel: "Chrome on macOS",
+        userAgent: "Mozilla/5.0 (Macintosh) Chrome/120.0.0.0",
+        createdAt: "2026-11-25T12:00:00.000Z",
+        expiresAt: "2026-11-25T12:05:00.000Z",
+        userName: "Ada Lovelace",
+        serverTime: SERVER_TIME,
+      }),
+    approve: () =>
+      Promise.resolve({
+        approved: true,
+        expiresAt: "2026-11-25T18:00:00.000Z",
+        serverTime: SERVER_TIME,
+      }),
+  });
+}
+
+async function settle(turns = 40): Promise<void> {
+  for (let index = 0; index < turns; index += 1) await Promise.resolve();
+  await nextTick();
 }
 
 function setOnline(online: boolean): void {
@@ -187,6 +273,81 @@ describe("accessibility of the shipped components (axe)", () => {
     );
     await nextTick();
     expect(wrapper.text()).toContain("Showing cached content.");
+    await expectNoAxeViolations();
+  });
+
+  it("keeps the login code input accessible", async () => {
+    const wrapper = mountUnderMain(LoginCodeInput, { modelValue: "" });
+    const input = wrapper.get("input");
+    expect(wrapper.get("label").attributes("for")).toBe(input.attributes("id"));
+    expect(input.attributes("aria-invalid")).toBeUndefined();
+    await expectNoAxeViolations();
+  });
+
+  it("keeps the login code input error state accessible", async () => {
+    const wrapper = mountUnderMain(LoginCodeInput, {
+      modelValue: "BCDFGHJ",
+      error: "That code is not valid.",
+    });
+    const input = wrapper.get("input");
+    expect(input.attributes("aria-invalid")).toBe("true");
+    expect(wrapper.get('[role="alert"]').text()).toBe("That code is not valid.");
+    expect(input.attributes("aria-describedby")).toContain(
+      wrapper.get('[role="alert"]').attributes("id"),
+    );
+    await expectNoAxeViolations();
+  });
+
+  it("keeps the waiting login card accessible", async () => {
+    const wrapper = mountUnderMain(LoginWithCodeCard, {
+      service: waitingDeviceService(),
+    });
+    await settle();
+    expect(
+      wrapper.get(".login-with-code-value").text().replace(/[^A-Z]/g, ""),
+    ).toBe("BCDFGHJK");
+    expect(wrapper.get(".login-with-code-status").attributes("role")).toBe(
+      "status",
+    );
+    await expectNoAxeViolations();
+  });
+
+  it("keeps the unavailable login card accessible", async () => {
+    const wrapper = mountUnderMain(LoginWithCodeCard, {
+      service: unusableDeviceService(),
+    });
+    await settle();
+    expect(wrapper.text()).toContain("Login with a code is unavailable");
+    expect(wrapper.find("button").exists()).toBe(true);
+    await expectNoAxeViolations();
+  });
+
+  it("keeps the unavailable authorize card accessible", async () => {
+    const wrapper = mountUnderMain(AuthorizeDeviceCard, {
+      service: asService({
+        capabilities: () => Promise.reject(new Error("probe failed")),
+      }),
+    });
+    await settle();
+    expect(wrapper.text()).toContain("unavailable");
+    expect(wrapper.get("button[type='submit']").attributes("disabled")).toBeDefined();
+    await expectNoAxeViolations();
+  });
+
+  it("keeps the password-protected authorize preview accessible", async () => {
+    const wrapper = mountUnderMain(AuthorizeDeviceCard, {
+      service: previewService(true),
+    });
+    await settle();
+    await wrapper.get("input[type='text']").setValue("BCDFGHJK");
+    await wrapper.get("form").trigger("submit");
+    await settle();
+    expect(wrapper.text()).toContain("Ada Lovelace");
+    const passwordId = wrapper.get("input[type='password']").attributes("id");
+    const labelled = wrapper
+      .findAll("label")
+      .some((label) => label.attributes("for") === passwordId);
+    expect(labelled).toBe(true);
     await expectNoAxeViolations();
   });
 });

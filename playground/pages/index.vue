@@ -11,6 +11,9 @@
     </button>
     <button type="button" @click="showAlert">Show alert</button>
     <p><NuxtLink to="/deep">Open the deep-import example</NuxtLink></p>
+    <p>
+      <NuxtLink to="/login-with-code">Open the login-with-code example</NuxtLink>
+    </p>
   </section>
 </template>
 
