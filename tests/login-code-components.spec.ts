@@ -468,6 +468,25 @@ describe("LoginWithCodeCard", () => {
     expect(service.create).toHaveBeenCalledTimes(2);
   });
 
+  it("offers a fresh request after cancel", async () => {
+    const service = newDeviceService();
+    const wrapper = mountComponent(LoginWithCodeCard, {
+      service: asService(service),
+    });
+    await settle();
+
+    await buttonWithText(wrapper, "Cancel").trigger("click");
+    await settle();
+
+    expect(wrapper.get('[role="status"]').text()).toBe("Login cancelled");
+
+    await buttonWithText(wrapper, "Try again").trigger("click");
+    await settle();
+
+    expect(wrapper.get('[role="status"]').text()).toBe("Waiting for approval");
+    expect(service.create).toHaveBeenCalledTimes(2);
+  });
+
   it("offers a retry after an error", async () => {
     const service = newDeviceService({
       create: vi
