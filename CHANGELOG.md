@@ -5,6 +5,21 @@ All notable changes to this project are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.1] - 2026-11-26
+
+### Changed
+
+- Dependency refresh: Nuxt 4.7.0, Vite 8.4.0, oxlint 1.95.0, Vitest and
+  `@vitest/coverage-v8` 5.1.2, `@types/node` 26.6.11 and postcss 8.5.33.
+  `typescript` stays on 6.0.3: 7.0.2 drops the `typescript/lib/tsc` entry
+  point that `vue-tsc` resolves, so `npm run typecheck` cannot run on it
+  until a `vue-tsc` release supports the TypeScript 7 compiler package.
+- Continuous integration: the Playwright browser cache moves to
+  `actions/cache@v6` and the failure report to `actions/upload-artifact@v7`
+  (Node 24 runtime and ESM releases; the inputs used — `path`, `key`, `name`,
+  `if-no-files-found`, `retention-days` — are unchanged). No public API
+  change.
+
 ## [0.16.0] - 2026-11-25
 
 ### Added
