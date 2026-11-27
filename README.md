@@ -472,6 +472,13 @@ and `--color-on-primary`): they are mapped onto internal
 prompt follows the host light/dark theme even when `assets/css/tokens.css` is
 not loaded.
 
+`AlertMessages` and `OfflineBanner` follow the same rule for their status
+colours: `--color-success`, `--color-warning`, `--color-error` and their
+`--color-on-*` labels are mapped onto internal `--alert-message-*` and
+`--offline-banner-*` variables with `light-dark()` fallbacks that mirror the
+layer's dark palette (brighter fills with dark labels). Status banners therefore
+keep AA contrast and follow the host light/dark theme in token-less hosts.
+
 No token is strictly required: each has a fallback. For a faithful theme, define:
 
 | Token | Use |

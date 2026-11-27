@@ -114,14 +114,25 @@ onUnmounted(() => {
 </script>
 
 <style>
+.alert-messages {
+  --alert-message-text: var(--color-text-inverse, #fff);
+  --alert-message-neutral: #546e7a;
+  --alert-message-success: var(--color-success, #2e7d32);
+  --alert-message-on-success: var(--color-on-success, #fff);
+  --alert-message-warning: var(--color-warning, #8a5a00);
+  --alert-message-on-warning: var(--color-on-warning, #fff);
+  --alert-message-error: var(--color-error, #c62828);
+  --alert-message-on-error: var(--color-on-error, #fff);
+}
+
 .alert-message {
   display: flex;
   align-items: center;
   gap: var(--space-sm, 0.5rem);
   padding: var(--space-base, 1rem);
   margin: var(--space-base, 1rem);
-  color: var(--color-text-inverse, #fff);
-  background-color: #546e7a;
+  color: var(--alert-message-text);
+  background-color: var(--alert-message-neutral);
 }
 
 .alert-message-text {
@@ -157,17 +168,28 @@ onUnmounted(() => {
 
 .alert-message-info,
 .alert-message-success {
-  background-color: var(--color-success, #2e7d32);
-  color: var(--color-on-success, #fff);
+  background-color: var(--alert-message-success);
+  color: var(--alert-message-on-success);
 }
 
 .alert-message-warning {
-  background-color: var(--color-warning, #8a5a00);
-  color: var(--color-on-warning, #fff);
+  background-color: var(--alert-message-warning);
+  color: var(--alert-message-on-warning);
 }
 
 .alert-message-error {
-  background-color: var(--color-error, #c62828);
-  color: var(--color-on-error, #fff);
+  background-color: var(--alert-message-error);
+  color: var(--alert-message-on-error);
+}
+
+@supports (color: light-dark(#000, #fff)) {
+  .alert-messages {
+    --alert-message-success: var(--color-success, light-dark(#2e7d32, #43a047));
+    --alert-message-on-success: var(--color-on-success, light-dark(#fff, #171717));
+    --alert-message-warning: var(--color-warning, light-dark(#8a5a00, #f0b429));
+    --alert-message-on-warning: var(--color-on-warning, light-dark(#fff, #171717));
+    --alert-message-error: var(--color-error, light-dark(#c62828, #ef5350));
+    --alert-message-on-error: var(--color-on-error, light-dark(#fff, #171717));
+  }
 }
 </style>

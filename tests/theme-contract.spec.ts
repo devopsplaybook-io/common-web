@@ -38,6 +38,10 @@ const HOST_TOKENS = new Set([
   "color-error",
   "color-danger",
   "color-success",
+  "color-text-inverse",
+  "color-on-success",
+  "color-on-error",
+  "color-on-warning",
 ]);
 
 // `--color-danger` is documented as the optional alias for `--color-error`.
@@ -363,5 +367,121 @@ describe("app update notice theme contract", () => {
         `${FILE}: "${declaration.prop}: ${declaration.value}" uses the raw colour "${literal}"`,
       ).toBeNull();
     });
+  });
+});
+
+describe("alert messages theme contract", () => {
+  const FILE = "components/AlertMessages.vue";
+  const INTERNAL_TOKENS = [
+    ["success", "--color-success"],
+    ["on-success", "--color-on-success"],
+    ["warning", "--color-warning"],
+    ["on-warning", "--color-on-warning"],
+    ["error", "--color-error"],
+    ["on-error", "--color-on-error"],
+  ] as const;
+
+  it("falls back to light-dark() values for token-less hosts", () => {
+    const css = styleBlockOf(FILE);
+    expect(css).toMatch(/@supports \(color: light-dark\(#000, #fff\)\)/);
+
+    for (const [name, host] of INTERNAL_TOKENS) {
+      const mapping = new RegExp(
+        `--alert-message-${name}:\\s*var\\(\\s*${host}\\s*,\\s*light-dark\\([^()]*\\)\\s*\\)`,
+      );
+      expect(
+        css,
+        `${FILE} must map ${host} to --alert-message-${name} with a light-dark() fallback`,
+      ).toMatch(mapping);
+    }
+  });
+
+  it("consumes only documented host tokens and declares them in tokens.css", () => {
+    const tokensCss = readFileSync(
+      resolve(SOURCE_ROOT, "assets/css/tokens.css"),
+      "utf8",
+    );
+    const declared = declaredProperties(tokensCss);
+
+    for (const [, token] of styleBlockOf(FILE).matchAll(
+      /var\(\s*--(color-[\w-]+)/g,
+    )) {
+      expect(
+        HOST_TOKENS.has(token!),
+        `${FILE} references the undocumented host token --${token}`,
+      ).toBe(true);
+      expect(
+        declared.has(`--${token}`),
+        `${FILE} references --${token}, which assets/css/tokens.css does not define`,
+      ).toBe(true);
+    }
+  });
+
+  it("declares every internal token it consumes", () => {
+    const css = styleBlockOf(FILE);
+    const declared = declaredProperties(css);
+
+    for (const [, token] of css.matchAll(/var\(\s*--(alert-message-[\w-]+)/g)) {
+      expect(
+        declared.has(`--${token}`),
+        `${FILE} consumes --${token} without declaring it`,
+      ).toBe(true);
+    }
+  });
+});
+
+describe("offline banner theme contract", () => {
+  const FILE = "components/OfflineBanner.vue";
+  const INTERNAL_TOKENS = [
+    ["text", "--color-on-warning"],
+    ["surface", "--color-warning"],
+  ] as const;
+
+  it("falls back to light-dark() values for token-less hosts", () => {
+    const css = styleBlockOf(FILE);
+    expect(css).toMatch(/@supports \(color: light-dark\(#000, #fff\)\)/);
+
+    for (const [name, host] of INTERNAL_TOKENS) {
+      const mapping = new RegExp(
+        `--offline-banner-${name}:\\s*var\\(\\s*${host}\\s*,\\s*light-dark\\([^()]*\\)\\s*\\)`,
+      );
+      expect(
+        css,
+        `${FILE} must map ${host} to --offline-banner-${name} with a light-dark() fallback`,
+      ).toMatch(mapping);
+    }
+  });
+
+  it("consumes only documented host tokens and declares them in tokens.css", () => {
+    const tokensCss = readFileSync(
+      resolve(SOURCE_ROOT, "assets/css/tokens.css"),
+      "utf8",
+    );
+    const declared = declaredProperties(tokensCss);
+
+    for (const [, token] of styleBlockOf(FILE).matchAll(
+      /var\(\s*--(color-[\w-]+)/g,
+    )) {
+      expect(
+        HOST_TOKENS.has(token!),
+        `${FILE} references the undocumented host token --${token}`,
+      ).toBe(true);
+      expect(
+        declared.has(`--${token}`),
+        `${FILE} references --${token}, which assets/css/tokens.css does not define`,
+      ).toBe(true);
+    }
+  });
+
+  it("declares every internal token it consumes", () => {
+    const css = styleBlockOf(FILE);
+    const declared = declaredProperties(css);
+
+    for (const [, token] of css.matchAll(/var\(\s*--(offline-banner-[\w-]+)/g)) {
+      expect(
+        declared.has(`--${token}`),
+        `${FILE} consumes --${token} without declaring it`,
+      ).toBe(true);
+    }
   });
 });
