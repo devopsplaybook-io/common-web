@@ -292,3 +292,76 @@ describe("theme contract", () => {
     }
   });
 });
+
+describe("app update notice theme contract", () => {
+  const FILE = "components/AppUpdateNotice.vue";
+  const INTERNAL_TOKENS = [
+    ["text", "--color-text"],
+    ["surface", "--color-surface-raised"],
+    ["border", "--color-border"],
+    ["primary", "--color-primary"],
+    ["on-primary", "--color-on-primary"],
+  ] as const;
+
+  it("falls back to light-dark() values for token-less hosts", () => {
+    const css = styleBlockOf(FILE);
+    expect(css).toMatch(/@supports \(color: light-dark\(#000, #fff\)\)/);
+
+    for (const [name, host] of INTERNAL_TOKENS) {
+      const mapping = new RegExp(
+        `--app-update-notice-${name}:\\s*var\\(\\s*${host}\\s*,\\s*light-dark\\([^()]*\\)\\s*\\)`,
+      );
+      expect(
+        css,
+        `${FILE} must map ${host} to --app-update-notice-${name} with a light-dark() fallback`,
+      ).toMatch(mapping);
+    }
+  });
+
+  it("consumes only documented host tokens and declares them in tokens.css", () => {
+    const tokensCss = readFileSync(
+      resolve(SOURCE_ROOT, "assets/css/tokens.css"),
+      "utf8",
+    );
+    const declared = declaredProperties(tokensCss);
+
+    for (const [, token] of styleBlockOf(FILE).matchAll(
+      /var\(\s*--(color-[\w-]+)/g,
+    )) {
+      expect(
+        HOST_TOKENS.has(token!),
+        `${FILE} references the undocumented host token --${token}`,
+      ).toBe(true);
+      expect(
+        declared.has(`--${token}`),
+        `${FILE} references --${token}, which assets/css/tokens.css does not define`,
+      ).toBe(true);
+    }
+  });
+
+  it("declares every internal token it consumes", () => {
+    const css = styleBlockOf(FILE);
+    const declared = declaredProperties(css);
+
+    for (const [, token] of css.matchAll(
+      /var\(\s*--(app-update-notice-[\w-]+)/g,
+    )) {
+      expect(
+        declared.has(`--${token}`),
+        `${FILE} consumes --${token} without declaring it`,
+      ).toBe(true);
+    }
+  });
+
+  it("uses no raw colour literals in colour declarations", () => {
+    parseStyle(FILE).walkDecls((declaration: Declaration) => {
+      if (declaration.prop.startsWith("--")) return;
+      if (!COLOUR_PROPERTIES.has(declaration.prop)) return;
+      const literal = rawColour(declaration.value);
+      expect(
+        literal,
+        `${FILE}: "${declaration.prop}: ${declaration.value}" uses the raw colour "${literal}"`,
+      ).toBeNull();
+    });
+  });
+});

@@ -5,6 +5,18 @@ All notable changes to this project are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.2] - 2026-11-27
+
+### Fixed
+
+- `AppUpdateNotice` follows the application light/dark theme in hosts that
+  import the component without the layer's `assets/css/tokens.css`. Its five
+  colour tokens (`--color-text`, `--color-surface-raised`, `--color-border`,
+  `--color-primary` and `--color-on-primary`) are now mapped onto internal
+  `--app-update-notice-*` variables with `light-dark()` fallbacks, matching the
+  login-with-code components. As with those components, a token-less host must
+  declare `color-scheme` for the fallbacks to follow the theme.
+
 ## [0.16.1] - 2026-11-26
 
 ### Changed

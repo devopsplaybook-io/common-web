@@ -54,15 +54,21 @@ const emit = defineEmits<{ reload: []; later: [] }>();
 
 <style>
 .app-update-notice {
+  --app-update-notice-text: var(--color-text, #171717);
+  --app-update-notice-surface: var(--color-surface-raised, #f5f5f5);
+  --app-update-notice-border: var(--color-border, #d6d6d6);
+  --app-update-notice-primary: var(--color-primary, #c62828);
+  --app-update-notice-on-primary: var(--color-on-primary, #fff);
+
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-sm, 0.5rem);
   padding: var(--space-sm, 0.5rem) var(--space-base, 1rem);
-  color: var(--color-text, #171717);
-  background: var(--color-surface-raised, #f5f5f5);
-  border-top: 1px solid var(--color-border, #d6d6d6);
+  color: var(--app-update-notice-text);
+  background: var(--app-update-notice-surface);
+  border-top: 1px solid var(--app-update-notice-border);
   font-size: var(--text-sm, 0.875rem);
 }
 
@@ -80,19 +86,19 @@ const emit = defineEmits<{ reload: []; later: [] }>();
   padding: var(--space-xs, 0.25rem) var(--space-sm, 0.5rem);
   color: inherit;
   background: transparent;
-  border: 1px solid var(--color-border, #d6d6d6);
+  border: 1px solid var(--app-update-notice-border);
   border-radius: var(--radius-sm, 0.25rem);
   cursor: pointer;
 }
 
 .app-update-notice-reload {
-  color: var(--color-on-primary, #fff);
-  background: var(--color-primary, #c62828);
-  border-color: var(--color-primary, #c62828);
+  color: var(--app-update-notice-on-primary);
+  background: var(--app-update-notice-primary);
+  border-color: var(--app-update-notice-primary);
 }
 
 .app-update-notice-button:focus-visible {
-  outline: 2px solid var(--color-primary, #c62828);
+  outline: 2px solid var(--app-update-notice-primary);
   outline-offset: 2px;
 }
 
@@ -106,5 +112,15 @@ const emit = defineEmits<{ reload: []; later: [] }>();
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border-width: 0;
+}
+
+@supports (color: light-dark(#000, #fff)) {
+  .app-update-notice {
+    --app-update-notice-text: var(--color-text, light-dark(#171717, #d7dee4));
+    --app-update-notice-surface: var(--color-surface-raised, light-dark(#f5f5f5, #1b242c));
+    --app-update-notice-border: var(--color-border, light-dark(#d6d6d6, #2e3a44));
+    --app-update-notice-primary: var(--color-primary, light-dark(#c62828, #ff8a80));
+    --app-update-notice-on-primary: var(--color-on-primary, light-dark(#fff, #171717));
+  }
 }
 </style>

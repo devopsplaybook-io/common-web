@@ -229,7 +229,11 @@ toolkit assumes none.
   build id. Pass `manifestUrl`/`fallbackShellUrl` when an app customizes
   `baseURL` or `buildAssetsDir`.
 - `useAppUpdate()` schedules the checks and exposes the prompt state;
-  `AppUpdateNotice` renders it and is driven only by props and events.
+  `AppUpdateNotice` renders it and is driven only by props and events. The
+  notice follows the host light/dark theme through the shared `--color-*`
+  tokens, with `light-dark()` fallbacks when the host defines none (a
+  token-less host must declare `color-scheme`, as described in
+  "Theming and non-layer hosts").
 - `acceptServiceWorkerUpdate()` (from
   `@devopsplaybook.io/common-web/services/ServiceWorkerUpdate`) activates a
   waiting worker and reloads exactly once.
@@ -460,6 +464,13 @@ from the host application's tokens, so they work in the Nuxt layer (which ships
 `assets/css/tokens.css`) and when the SFCs are imported directly into a plain
 Vue/Nuxt app that defines only a partial palette. Every component root carries
 the `lc-theme` class and maps the host tokens onto internal `--lc-*` variables.
+
+`AppUpdateNotice` follows the same rule for its five colour tokens
+(`--color-text`, `--color-surface-raised`, `--color-border`, `--color-primary`
+and `--color-on-primary`): they are mapped onto internal
+`--app-update-notice-*` variables with `light-dark()` fallbacks, so the reload
+prompt follows the host light/dark theme even when `assets/css/tokens.css` is
+not loaded.
 
 No token is strictly required: each has a fallback. For a faithful theme, define:
 
